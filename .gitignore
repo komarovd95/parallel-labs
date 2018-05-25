@@ -1,0 +1,6 @@
+build/
+*.png
+*.svg
+*.jpg
+*.zip
+*.out
