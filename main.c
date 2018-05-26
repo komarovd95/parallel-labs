@@ -211,13 +211,9 @@ double *generate_m2(int n, unsigned int *seed) {
         ippArray[i] = (double) rand_r(seed);
     }
     // ippsDivC_64f_I(((double) RAND_MAX) / (A * 9.0), ippArray, n);
+    ippsDivC_64f_I((double) RAND_MAX, ippArray, n);
     for (i = 0; i < n; ++i) {
-        double val;
-        val = ippArray[i];
-        val /= (double) RAND_MAX;
-        val *= A * 9.0;
-        val += A;
-        ippArray[i] = val;
+        ippArray[i] = ippArray[i] * (A * 9.0) + A;
     }
     // ippsDivC_64f_I((double) RAND_MAX, ippArray, n);
     // ippsMulC_64f_I(A * 9.0, ippArray, n);
