@@ -2,9 +2,11 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
+#include "ipp.h"
+#include "ipps.h"
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 20
+#define NUMBER_OF_TESTS 2
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
@@ -116,6 +118,8 @@ int main(int argc, char* argv[]) {
     n = atoi(argv[1]);
     seed = (unsigned int) atoi(argv[2]);
 
+    ippSetNumThreads(1);
+
     best_time = MAX_EXECUTION_TIME;
     for (i = 0; i < NUMBER_OF_TESTS; ++i) {
         struct timeval start, end;
@@ -179,16 +183,16 @@ double do_work(int n, unsigned int seed) {
 
 double *generate_m1(int n, unsigned int *seed) {
     int i;
-    double *array;
+    Ipp64f *ippArray;
 
-    array = malloc(sizeof(double) * n);
+    ippArray = ippsMalloc_64f(n);
     for (i = 0; i < n; ++i) {
-        array[i] = (double) rand_r(seed);
+        ippArray[i] = (double) rand_r(seed);
     }
-    for (i = 0; i < n; ++i) {
-        array[i] = array[i] / ((double) RAND_MAX) * (A - 1.0) + 1.0;
-    }
-    return array;
+    ippsDivC_64f_I((double) RAND_MAX, ippArray, n);
+    ippsMulC_64f_I(A - 1.0, ippArray, n);
+    ippsAddC_64f_I(1.0, ippArray, n);
+    return ippArray;
 }
 
 void map_m1(int n, double *m1) {
@@ -200,16 +204,35 @@ void map_m1(int n, double *m1) {
 
 double *generate_m2(int n, unsigned int *seed) {
     int i;
-    double *array;
+    Ipp64f *ippArray;
 
-    array = malloc(sizeof(double) * n);
+    ippArray = ippsMalloc_64f(n);
     for (i = 0; i < n; ++i) {
-        array[i] = (double) rand_r(seed);
+        ippArray[i] = (double) rand_r(seed);
     }
+    // ippsDivC_64f_I(((double) RAND_MAX) / (A * 9.0), ippArray, n);
     for (i = 0; i < n; ++i) {
-        array[i] = array[i] / ((double) RAND_MAX) * A * 9.0 + A;
+        double val;
+        val = ippArray[i];
+        val /= (double) RAND_MAX;
+        val *= A * 9.0;
+        val += A;
+        ippArray[i] = val;
     }
-    return array;
+    // ippsDivC_64f_I((double) RAND_MAX, ippArray, n);
+    // ippsMulC_64f_I(A * 9.0, ippArray, n);
+    // ippsAddC_64f_I(A, ippArray, n);
+    return ippArray;
+    // double *array;
+
+    // array = malloc(sizeof(double) * n);
+    // for (i = 0; i < n; ++i) {
+    //     array[i] = (double) rand_r(seed);
+    // }
+    // for (i = 0; i < n; ++i) {
+    //     array[i] = array[i] / ((double) RAND_MAX) * A * 9.0 + A;
+    // }
+    // return array;
 }
 
 void map_m2(int n, double *m2) {
