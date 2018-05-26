@@ -7,7 +7,7 @@
 #include "fwSignal.h"
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 20
+#define NUMBER_OF_TESTS 1
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
@@ -98,7 +98,7 @@ Fw64f reduce(int n, Fw64f *array, Fw64f min);
  * @param seed a random seed
  * @return reduced result of work
  */
-double do_work(int n, unsigned int seed);
+Fw64f do_work(int n, unsigned int seed);
 
 int main(int argc, char* argv[]) {
     int n;
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
     unsigned int m;
     int i;
     long int best_time;
-    double expected_result;
+    Fw64f expected_result;
 
     n = atoi(argv[1]);
     seed = (unsigned int) atoi(argv[2]);
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
     for (i = 0; i < NUMBER_OF_TESTS; ++i) {
         struct timeval start, end;
         long int elapsed_time;
-        double work_result;
+        Fw64f work_result;
 
         srand(seed);
         gettimeofday(&start, NULL);
@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-double do_work(int n, unsigned int seed) {
+Fw64f do_work(int n, unsigned int seed) {
     Fw64f *m1, *m2;
     int m1_size, m2_size;
     Fw64f min_value;
@@ -248,17 +248,27 @@ Fw64f min_positive(int n, Fw64f *array) {
 Fw64f reduce(int n, Fw64f *array, Fw64f min) {
     int i;
     int m;
+    Fw64f *temp;
     Fw64f sum;
 
+    temp = fwsMalloc_64f(n);
     fwsDivC_64f_I(min, array, n);
-    sum = 0.0;
+    m = 0;
     for (i = 0; i < n; ++i) {
         Fw64f value;
 
         value = array[i];
         if (!(((int) value) % 2)) {
-            sum += value;
+            temp[m++] = value;
         }
     }
+
+    fwsSin_64f_A53(temp, temp, m);
+
+    sum = 0.0;
+    for (i = 0; i < m; ++i) {
+        sum += temp[i];
+    }
+    fwsFree(temp);
     return sum;
 }
