@@ -223,7 +223,7 @@ void map_m2(int n, double *m2) {
 
     zip_sum(m2 + 1, temp, n - 1);
 
-    for (i = 1; i < n; ++i) {
+    for (i = 0; i < n; ++i) {
         m2[i] = fabs(tan(m2[i]));
     }
 }

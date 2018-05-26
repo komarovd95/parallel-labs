@@ -39,7 +39,10 @@ compilers_settings = [
     ("gcc10", 10),
     ("gcc100", 100),
     ("cc1", 1),
+    ("cc2", 2),
     ("cc4", 4),
+    ("cc10", 10),
+    ("cc100", 100),
     ("icc1", 1),
     ("icc2", 2),
     ("icc4", 4),
@@ -104,7 +107,12 @@ gcc_s = speed_up_plots(
 cc_s = speed_up_plots(
     "CC",
     "cc1",
-    [("cc4", 4)]
+    [
+        ("cc2", 2),
+        ("cc4", 4),
+        ("cc10", 10),
+        ("cc100", 100)
+    ]
 )
 
 icc_s = speed_up_plots(
@@ -143,7 +151,12 @@ parallel_eff_plot(
 parallel_eff_plot(
     "CC",
     cc_s,
-    [("cc4", 4)]
+    [
+        ("cc2", 2),
+        ("cc4", 4),
+        ("cc10", 10),
+        ("cc100", 100)
+    ]
 )
 
 parallel_eff_plot(

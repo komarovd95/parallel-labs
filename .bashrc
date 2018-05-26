@@ -21,7 +21,7 @@ gcc-par-compile() {
 }
 
 cc-par-compile() {
-    cc -xO3 -xautopar -xloopinfo main.c -lm -o build/lab$1-cc4.out
+    cc -xO3 -xautopar -xloopinfo main.c -lm -o build/lab$1-cc$2.out
 }
 
 icc-par-compile() {
@@ -45,7 +45,8 @@ gcc-par() {
 }
 
 cc-par() {
-    cc-par-compile $1 && lab-exp $2 $3 $1 cc4
+    export OMP_NUM_THREADS=$2
+    cc-par-compile $1 $2 && lab-exp $3 $4 $1 cc$2
 }
 
 icc-par() {
@@ -67,16 +68,19 @@ lab-exp() {
 do-lab() {
     lab=1
     lab-clean
-    gcc-seq $lab $1 $2
-    gcc-par $lab 2 $1 $2
-    gcc-par $lab 4 $1 $2
-    gcc-par $lab 10 $1 $2
-    gcc-par $lab 100 $1 $2
-    cc-seq $lab $1 $2
-    cc-par $lab $1 $2
-    icc-seq $lab $1 $2
-    icc-par $lab 2 $1 $2
-    icc-par $lab 4 $1 $2
-    icc-par $lab 10 $1 $2
-    icc-par $lab 100 $1 $2
+    # gcc-seq $lab $1 $2
+    # gcc-par $lab 2 $1 $2
+    # gcc-par $lab 4 $1 $2
+    # gcc-par $lab 10 $1 $2
+    # gcc-par $lab 100 $1 $2
+    # cc-seq $lab $1 $2
+    cc-par $lab 2 $1 $2
+    cc-par $lab 4 $1 $2
+    cc-par $lab 10 $1 $2
+    cc-par $lab 100 $1 $2
+    # icc-seq $lab $1 $2
+    # icc-par $lab 2 $1 $2
+    # icc-par $lab 4 $1 $2
+    # icc-par $lab 10 $1 $2
+    # icc-par $lab 100 $1 $2
 }
