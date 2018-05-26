@@ -4,7 +4,7 @@
 #include <math.h>
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 20
+#define NUMBER_OF_TESTS 2
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
@@ -186,7 +186,7 @@ double *generate_m1(int n, unsigned int *seed) {
         array[i] = (double) rand_r(seed);
     }
     for (i = 0; i < n; ++i) {
-        array[i] = array[i] / ((double) RAND_MAX) * (A - 1.0) + 1.0;
+        array[i] = (array[i] / ((double) RAND_MAX)) * (A - 1.0) + 1.0;
     }
     return array;
 }
@@ -207,7 +207,7 @@ double *generate_m2(int n, unsigned int *seed) {
         array[i] = (double) rand_r(seed);
     }
     for (i = 0; i < n; ++i) {
-        array[i] = array[i] / ((double) RAND_MAX) * A * 9.0 + A;
+        array[i] = (array[i] / ((double) RAND_MAX)) * (A * 9.0) + A;
     }
     return array;
 }
