@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
+#include "fwBase.h"
+#include "fwImage.h"
+#include "fwSignal.h"
 
 #define EPS 1e-6
 #define NUMBER_OF_TESTS 20
@@ -17,7 +20,7 @@
  * @param seed random generator´s seed
  * @return random array
  */
-double *generate_m1(int n, unsigned int *seed);
+Fw64f *generate_m1(int n, unsigned int *seed);
 
 /**
  * Maps values of given array: m1[i] = sqrt(m1[i] / E)
@@ -25,7 +28,7 @@ double *generate_m1(int n, unsigned int *seed);
  * @param n size of given array
  * @param m1 an array
  */
-void map_m1(int n, double *m1);
+void map_m1(int n, Fw64f *m1);
 
 /**
  * Generates a random array of given size and seed.
@@ -35,7 +38,7 @@ void map_m1(int n, double *m1);
  * @param seed random generator's seed
  * @return random array
  */
-double *generate_m2(int n, unsigned int *seed);
+Fw64f *generate_m2(int n, unsigned int *seed);
 
 /**
  * Maps values of given array: m2[i] = abs(tan(m2[i] + m2[i-1]))
@@ -43,7 +46,7 @@ double *generate_m2(int n, unsigned int *seed);
  * @param n size of given array
  * @param m2 an array
  */
-void map_m2(int n, double *m2);
+void map_m2(int n, Fw64f *m2);
 
 /**
  * Merges values of given arrays into M2 array.
@@ -53,7 +56,7 @@ void map_m2(int n, double *m2);
  * @param m1 a M1 array
  * @param m2 a M2 array
  */
-void merge(int n, double *m1, double *m2);
+void merge(int n, Fw64f *m1, Fw64f *m2);
 
 /**
  * Sorts given array using Insertion Sort algorithm.
@@ -62,7 +65,7 @@ void merge(int n, double *m1, double *m2);
  * @param n size of given array
  * @param array an array
  */
-void sort(int n, double *array);
+void sort(int n, Fw64f *array);
 
 /**
  * Finds minimal positive element of given array.
@@ -71,7 +74,7 @@ void sort(int n, double *array);
  * @param array sorted array
  * @return minimal positive element or 0.0 if no positive elements found
  */
-double min_positive(int n, double *array);
+Fw64f min_positive(int n, Fw64f *array);
 
 /**
  * Reduces given array into single double value by function:
@@ -82,16 +85,7 @@ double min_positive(int n, double *array);
  * @param min minimal value for dividing, must be positive
  * @return reduced sum
  */
-double reduce(int n, double *array, double min);
-
-/**
- * Apply sum function to pairs of zipped arrays.
- * 
- * @param left result array
- * @param right an array
- * @param len size of zipped arrays
- */
-void zip_sum(double *left, double *right, int len);
+Fw64f reduce(int n, Fw64f *array, Fw64f min);
 
 /**
  *  Does work for given steps:
@@ -109,13 +103,16 @@ double do_work(int n, unsigned int seed);
 int main(int argc, char* argv[]) {
     int n;
     unsigned int seed;
+    unsigned int m;
     int i;
     long int best_time;
     double expected_result;
 
     n = atoi(argv[1]);
     seed = (unsigned int) atoi(argv[2]);
+    m = (unsigned int) atoi(argv[3]);
 
+    fwSetNumThreads(m);
     best_time = MAX_EXECUTION_TIME;
     for (i = 0; i < NUMBER_OF_TESTS; ++i) {
         struct timeval start, end;
@@ -151,9 +148,9 @@ int main(int argc, char* argv[]) {
 }
 
 double do_work(int n, unsigned int seed) {
-    double *m1, *m2;
+    Fw64f *m1, *m2;
     int m1_size, m2_size;
-    double min_value;
+    Fw64f min_value;
 
     m1_size = n;
     m2_size = n / 2;
@@ -177,74 +174,57 @@ double do_work(int n, unsigned int seed) {
     return reduce(m2_size, m2, min_value);
 }
 
-double *generate_m1(int n, unsigned int *seed) {
+Fw64f *generate_m1(int n, unsigned int *seed) {
     int i;
-    double *array;
+    Fw64f *array;
 
-    array = malloc(sizeof(double) * n);
+    array = fwsMalloc_64f(n);
     for (i = 0; i < n; ++i) {
-        array[i] = (double) rand_r(seed);
+        array[i] = (Fw64f) rand_r(seed);
     }
-    for (i = 0; i < n; ++i) {
-        array[i] = array[i] / ((double) RAND_MAX) * (A - 1.0) + 1.0;
-    }
+    fwsDivC_64f_I((Fw64f) RAND_MAX, array, n);
+    fwsMulC_64f_I((Fw64f) (A - 1.0), array, n);
+    fwsAddC_64f_I((Fw64f) 1.0, array, n);
     return array;
 }
 
-void map_m1(int n, double *m1) {
-    int i;
-    for (i = 0; i < n; ++i) {
-        m1[i] = sqrt(m1[i] / M_E);
-    }
+void map_m1(int n, Fw64f *m1) {
+    fwsDivC_64f_I((Fw64f) M_E, m1, n);
+    fwsSqrt_64f_I(m1, n);
 }
 
-double *generate_m2(int n, unsigned int *seed) {
+Fw64f *generate_m2(int n, unsigned int *seed) {
     int i;
-    double *array;
+    Fw64f *array;
 
-    array = malloc(sizeof(double) * n);
+    array = fwsMalloc_64f(n);
     for (i = 0; i < n; ++i) {
-        array[i] = (double) rand_r(seed);
+        array[i] = (Fw64f) rand_r(seed);
     }
-    for (i = 0; i < n; ++i) {
-        array[i] = array[i] / ((double) RAND_MAX) * A * 9.0 + A;
-    }
+    fwsDivC_64f_I((Fw64f) RAND_MAX, array, n);
+    fwsMulC_64f_I((Fw64f) (9.0 * A), array, n);
+    fwsAddC_64f_I((Fw64f) A, array, n);
     return array;
 }
 
-void map_m2(int n, double *m2) {
-    int i;
-    double *temp;
+void map_m2(int n, Fw64f *m2) {
+    Fw64f *temp;
 
-    temp = malloc(sizeof(double) * n);
-    for (i = 0; i < n; ++i) {
-        temp[i] = m2[i];
-    }
-
-    zip_sum(m2 + 1, temp, n - 1);
-
-    for (i = 1; i < n; ++i) {
-        m2[i] = fabs(tan(m2[i]));
-    }
+    temp = fwsMalloc_64f(n);
+    fwsMove_64f(m2, temp, n);
+    fwsAdd_64f_I(m2, temp + 1, n - 1);
+    fwsTan_64f_A53(temp, m2, n);
+    fwsAbs_64f_I(m2, n);
+    fwsFree(temp);
 }
 
-void zip_sum(double *left, double *right, int len) {
-    int i;
-    for (i = 0; i < len; ++i) {
-        left[i] += right[i];
-    }
+void merge(int n, Fw64f *m1, Fw64f *m2) {
+    fwsMul_64f_I(m1, m2, n);
 }
 
-void merge(int n, double *m1, double *m2) {
-    int i;
-    for (i = 0; i < n; ++i) {
-        m2[i] *= m1[i];
-    }
-}
-
-void sort(int n, double *array) {
+void sort(int n, Fw64f *array) {
     int i, j;
-    double key;
+    Fw64f key;
 
     for (i = 1; i < n; ++i) {
         key = array[i];
@@ -255,27 +235,29 @@ void sort(int n, double *array) {
     }
 }
 
-double min_positive(int n, double *array) {
+Fw64f min_positive(int n, Fw64f *array) {
     int i;
     for (i = 0; i < n; ++i) {
         if (array[i] != 0.0) {
             return array[i];
         }
     }
-    return 0.0;
+    return (Fw64f) 0.0;
 }
 
-double reduce(int n, double *array, double min) {
+Fw64f reduce(int n, Fw64f *array, Fw64f min) {
     int i;
-    double sum;
+    int m;
+    Fw64f sum;
 
+    fwsDivC_64f_I(min, array, n);
     sum = 0.0;
     for (i = 0; i < n; ++i) {
-        double value;
+        Fw64f value;
 
-        value = array[i] / min;
+        value = array[i];
         if (!(((int) value) % 2)) {
-            sum += sin(value);
+            sum += value;
         }
     }
     return sum;

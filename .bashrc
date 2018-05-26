@@ -4,79 +4,55 @@ lab-clean() {
     rm -rf build && mkdir build;
 }
 
-gcc-seq-compile() {
-    gcc main.c -O3 -o build/lab$1-gcc1.out -lm;
+create-links() {
+    CUR_PWD=${PWD}
+    cd ./fw/$1/lib
+    ln -sf ./libfwBase.so.1.3.1 libfwBase.so
+    ln -sf ./libfwBase.so.1.3.1 libfwBase.so.1
+    ln -sf ./libfwImage.so.1.3.1 libfwImage.so
+    ln -sf ./libfwImage.so.1.3.1 libfwImage.so.1
+    ln -sf ./libfwSignal.so.1.3.1 libfwSignal.so
+    ln -sf ./libfwSignal.so.1.3.1 libfwSignal.so.1
+    cd $CUR_PWD
 }
 
-cc-seq-compile() {
-    cc -xO3 main.c -lm -o build/lab$1-cc1.out
+build-framewave() {
+    echo $1 $2 $3
+    version=FW_1.3.1_Lin64
+    if [ ! -d "$PWD/fw" ]; then
+        mkdir fw
+        wget -O ./fw/framewave.tar.gz https://sourceforge.net/projects/framewave/files/framewave-releases/Framewave%201.3.1/$version.tar.gz/download
+        tar -xvzf ./fw/framewave.tar.gz -C ./fw
+        create-links $version
+    fi
+
+    export LD_LIBRARY_PATH=$PWD/fw/$version/lib:$LD_LIBRARY_PATH
+    echo $LD_LIBRARY_PATH
+    fw-compile 2 $version && lab-exp $1 $2 2 gcc-fw $3
 }
 
-icc-seq-compile() {
-    icc main.c -O3 -lm -fp-model precise -o build/lab$1-icc1.out
+fw-compile() {
+    gcc main.c -O3 -o build/lab$1-gcc-fw.out -Ifw/$2 -Lfw/$2/lib -lm -lfwBase -lfwImage -lfwSignal
 }
 
-gcc-par-compile() {
-    gcc main.c -O3 -floop-parallelize-all -ftree-parallelize-loops=$2 -lm -o build/lab$1-gcc$2.out;
-}
-
-cc-par-compile() {
-    cc -xO3 -xautopar -xloopinfo main.c -lm -o build/lab$1-cc4.out
-}
-
-icc-par-compile() {
-    icc main.c -O3 -lm -fp-model precise -parallel -qopt-report-phase=par -par-threshold$2 -o build/lab$1-icc$2.out
-}
-
-gcc-seq() {
-    gcc-seq-compile $1 && lab-exp $2 $3 $1 gcc1
-}
-
-cc-seq() {
-    cc-seq-compile $1 && lab-exp $2 $3 $1 cc1
-}
-
-icc-seq() {
-    icc-seq-compile $1 && lab-exp $2 $3 $1 icc1
-}
-
-gcc-par() {
-    gcc-par-compile $1 $2 && lab-exp $3 $4 $1 gcc$2
-}
-
-cc-par() {
-    cc-par-compile $1 && lab-exp $2 $3 $1 cc4
-}
-
-icc-par() {
-    icc-par-compile $1 $2 && lab-exp $3 $4 $1 icc$2
+do-lab() {
+    build-framewave $1 $2 1
+    build-framewave $1 $2 2
+    build-framewave $1 $2 3
+    build-framewave $1 $2 4
+    build-framewave $1 $2 10
+    build-framewave $1 $2 100
 }
 
 lab-exp() {
     # set -e
+    echo $1 $2 $3 $4 $5
     diff=$(( $2 - $1 ))
     step=$(( $diff / 10 ))
     counter=$1
     while [ $counter -le $2 ]; do
         echo $4 $counter
-        ./build/lab$3-$4.out $counter 47 > build/lab$3-$4-$counter.txt
+        ./build/lab$3-$4.out $counter 47 $5 > build/lab$3-$4-$5-$counter.txt
         counter=$(( $counter + $step ))
     done
-}
-
-do-lab() {
-    lab=1
-    lab-clean
-    gcc-seq $lab $1 $2
-    gcc-par $lab 2 $1 $2
-    gcc-par $lab 4 $1 $2
-    gcc-par $lab 10 $1 $2
-    gcc-par $lab 100 $1 $2
-    cc-seq $lab $1 $2
-    cc-par $lab $1 $2
-    icc-seq $lab $1 $2
-    icc-par $lab 2 $1 $2
-    icc-par $lab 4 $1 $2
-    icc-par $lab 10 $1 $2
-    icc-par $lab 100 $1 $2
 }
