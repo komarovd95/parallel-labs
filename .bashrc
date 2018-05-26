@@ -32,7 +32,7 @@ build-framewave() {
 }
 
 fw-compile() {
-    gcc main.c -O3 -o build/lab$1-gcc-fw.out -Ifw/$2 -Lfw/$2/lib -lm -lfwBase -lfwImage -lfwSignal
+    gcc -m64 -std=C99 main.c -O3-o build/lab$1-gcc-fw.out -Ifw/$2 -Lfw/$2/lib -lfwBase -lfwImage -lfwSignal
 }
 
 do-lab() {
