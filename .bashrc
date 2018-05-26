@@ -36,6 +36,7 @@ fw-compile() {
 }
 
 do-lab() {
+    lab-clean
     build-framewave $1 $2 1
     build-framewave $1 $2 2
     build-framewave $1 $2 3
