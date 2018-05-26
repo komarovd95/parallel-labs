@@ -186,7 +186,12 @@ double *generate_m1(int n, unsigned int *seed) {
         array[i] = (double) rand_r(seed);
     }
     for (i = 0; i < n; ++i) {
-        array[i] = (array[i] / ((double) RAND_MAX)) * (A - 1.0) + 1.0;
+        double val;
+        val = array[i];
+        val /= (double) RAND_MAX;
+        val *= (A - 1.0);
+        val += 1.0;
+        array[i] = val;
     }
     return array;
 }
@@ -207,7 +212,12 @@ double *generate_m2(int n, unsigned int *seed) {
         array[i] = (double) rand_r(seed);
     }
     for (i = 0; i < n; ++i) {
-        array[i] = (array[i] / ((double) RAND_MAX)) * (A * 9.0) + A;
+        double val;
+        val = array[i];
+        val /= (double) RAND_MAX;
+        val *= (A * 9.0);
+        val += A;
+        array[i] = val;
     }
     return array;
 }
