@@ -19,7 +19,7 @@
  * @param seed random generator´s seed
  * @return random array
  */
-double *generate_m1(int n, unsigned int *seed);
+Ipp64f *generate_m1(int n, unsigned int *seed);
 
 /**
  * Maps values of given array: m1[i] = sqrt(m1[i] / E)
@@ -27,7 +27,7 @@ double *generate_m1(int n, unsigned int *seed);
  * @param n size of given array
  * @param m1 an array
  */
-void map_m1(int n, double *m1);
+void map_m1(int n, Ipp64f *m1);
 
 /**
  * Generates a random array of given size and seed.
@@ -37,7 +37,7 @@ void map_m1(int n, double *m1);
  * @param seed random generator's seed
  * @return random array
  */
-double *generate_m2(int n, unsigned int *seed);
+Ipp64f *generate_m2(int n, unsigned int *seed);
 
 /**
  * Maps values of given array: m2[i] = abs(tan(m2[i] + m2[i-1]))
@@ -45,7 +45,7 @@ double *generate_m2(int n, unsigned int *seed);
  * @param n size of given array
  * @param m2 an array
  */
-void map_m2(int n, double *m2);
+void map_m2(int n, Ipp64f *m2);
 
 /**
  * Merges values of given arrays into M2 array.
@@ -55,7 +55,7 @@ void map_m2(int n, double *m2);
  * @param m1 a M1 array
  * @param m2 a M2 array
  */
-void merge(int n, double *m1, double *m2);
+void merge(int n, Ipp64f *m1, Ipp64f *m2);
 
 /**
  * Sorts given array using Insertion Sort algorithm.
@@ -64,7 +64,7 @@ void merge(int n, double *m1, double *m2);
  * @param n size of given array
  * @param array an array
  */
-void sort(int n, double *array);
+void sort(int n, Ipp64f *array);
 
 /**
  * Finds minimal positive element of given array.
@@ -73,7 +73,7 @@ void sort(int n, double *array);
  * @param array sorted array
  * @return minimal positive element or 0.0 if no positive elements found
  */
-double min_positive(int n, double *array);
+Ipp64f min_positive(int n, Ipp64f *array);
 
 /**
  * Reduces given array into single double value by function:
@@ -84,16 +84,7 @@ double min_positive(int n, double *array);
  * @param min minimal value for dividing, must be positive
  * @return reduced sum
  */
-double reduce(int n, double *array, double min);
-
-/**
- * Apply sum function to pairs of zipped arrays.
- * 
- * @param left result array
- * @param right an array
- * @param len size of zipped arrays
- */
-void zip_sum(double *left, double *right, int len);
+Ipp64f reduce(int n, Ipp64f *array, Ipp64f min);
 
 /**
  *  Does work for given steps:
@@ -106,25 +97,27 @@ void zip_sum(double *left, double *right, int len);
  * @param seed a random seed
  * @return reduced result of work
  */
-double do_work(int n, unsigned int seed);
+Ipp64f do_work(int n, unsigned int seed);
 
 int main(int argc, char* argv[]) {
     int n;
+    int n_threads;
     unsigned int seed;
     int i;
     long int best_time;
-    double expected_result;
+    Ipp64f expected_result;
 
     n = atoi(argv[1]);
     seed = (unsigned int) atoi(argv[2]);
+    n_threads = atoi(argv[3]);
 
-    ippSetNumThreads(1);
+    ippSetNumThreads(n_threads);
 
     best_time = MAX_EXECUTION_TIME;
     for (i = 0; i < NUMBER_OF_TESTS; ++i) {
         struct timeval start, end;
         long int elapsed_time;
-        double work_result;
+        Ipp64f work_result;
 
         srand(seed);
         gettimeofday(&start, NULL);
@@ -154,10 +147,10 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-double do_work(int n, unsigned int seed) {
-    double *m1, *m2;
+Ipp64f do_work(int n, unsigned int seed) {
+    Ipp64f *m1, *m2;
     int m1_size, m2_size;
-    double min_value;
+    Ipp64f min_value;
 
     m1_size = n;
     m2_size = n / 2;
@@ -195,14 +188,12 @@ double *generate_m1(int n, unsigned int *seed) {
     return ippArray;
 }
 
-void map_m1(int n, double *m1) {
-    int i;
-    for (i = 0; i < n; ++i) {
-        m1[i] = sqrt(m1[i] / M_E);
-    }
+void map_m1(int n, Ipp64f *m1) {
+    ippsDivC_64f_I(M_E, m1, n);
+    ippsSqrt_64f_I(m1, n);
 }
 
-double *generate_m2(int n, unsigned int *seed) {
+Ipp64f *generate_m2(int n, unsigned int *seed) {
     int i;
     Ipp64f *ippArray;
 
@@ -210,60 +201,29 @@ double *generate_m2(int n, unsigned int *seed) {
     for (i = 0; i < n; ++i) {
         ippArray[i] = (double) rand_r(seed);
     }
-    // ippsDivC_64f_I(((double) RAND_MAX) / (A * 9.0), ippArray, n);
     ippsDivC_64f_I((double) RAND_MAX, ippArray, n);
-    for (i = 0; i < n; ++i) {
-        ippArray[i] = ippArray[i] * (A * 9.0) + A;
-    }
-    // ippsDivC_64f_I((double) RAND_MAX, ippArray, n);
-    // ippsMulC_64f_I(A * 9.0, ippArray, n);
-    // ippsAddC_64f_I(A, ippArray, n);
+    ippsMulC_64f_I(A * 9.0, ippArray, n);
+    ippsAddC_64f_I(A, ippArray, n);
     return ippArray;
-    // double *array;
-
-    // array = malloc(sizeof(double) * n);
-    // for (i = 0; i < n; ++i) {
-    //     array[i] = (double) rand_r(seed);
-    // }
-    // for (i = 0; i < n; ++i) {
-    //     array[i] = array[i] / ((double) RAND_MAX) * A * 9.0 + A;
-    // }
-    // return array;
 }
 
-void map_m2(int n, double *m2) {
-    int i;
-    double *temp;
+void map_m2(int n, Ipp64f *m2) {
+    Ipp64f *tmpArray;
 
-    temp = malloc(sizeof(double) * n);
-    for (i = 0; i < n; ++i) {
-        temp[i] = m2[i];
-    }
-
-    zip_sum(m2 + 1, temp, n - 1);
-
-    for (i = 0; i < n; ++i) {
-        m2[i] = fabs(tan(m2[i]));
-    }
+    tmpArray = ippsMalloc_64f(n);
+    ippsCopy_64f(m2, tmpArray, n);
+    ippsAdd_64f_I(tmpArray, m2 + 1, n - 1);
+    ippsTan_64f_A53(m2, m2, n);
+    ippsAbs_64f_I(m2, n);
 }
 
-void zip_sum(double *left, double *right, int len) {
-    int i;
-    for (i = 0; i < len; ++i) {
-        left[i] += right[i];
-    }
+void merge(int n, Ipp64f *m1, Ipp64f *m2) {
+    ippsMul_64f_I(m1, m2, n);
 }
 
-void merge(int n, double *m1, double *m2) {
-    int i;
-    for (i = 0; i < n; ++i) {
-        m2[i] *= m1[i];
-    }
-}
-
-void sort(int n, double *array) {
+void sort(int n, Ipp64f *array) {
     int i, j;
-    double key;
+    Ipp64f key;
 
     for (i = 1; i < n; ++i) {
         key = array[i];
@@ -274,7 +234,7 @@ void sort(int n, double *array) {
     }
 }
 
-double min_positive(int n, double *array) {
+Ipp64f min_positive(int n, Ipp64f *array) {
     int i;
     for (i = 0; i < n; ++i) {
         if (array[i] != 0.0) {
@@ -284,18 +244,24 @@ double min_positive(int n, double *array) {
     return 0.0;
 }
 
-double reduce(int n, double *array, double min) {
+Ipp64f reduce(int n, Ipp64f *array, Ipp64f min_val) {
     int i;
-    double sum;
+    Ipp64f *tmpArray;
+    int m;
+    Ipp64f sum;
 
-    sum = 0.0;
+    tmpArray = ippsMalloc_64f(n);
+    ippsDivC_64f_I(min_val, array, n);
+    m = 0;
     for (i = 0; i < n; ++i) {
-        double value;
+        Ipp64f value;
 
-        value = array[i] / min;
+        value = array[i];
         if (!(((int) value) % 2)) {
-            sum += sin(value);
+            tmpArray[m++] = value;
         }
     }
+    ippsSin_64f_A53(tmpArray, tmpArray, m);
+    ippsSum_64f(tmpArray, m, &sum);
     return sum;
 }
