@@ -25,7 +25,7 @@ cc-par-compile() {
 }
 
 icc-par-compile() {
-    icc main.c -O3 -lm -fp-model precise -parallel -qopt-report-phase=par -par-threshold$2 -o build/lab$1-icc$2.out
+    icc main.c -O3 -lm -fp-model precise -parallel -qopt-report-phase=par -par-threshold$2  -o build/lab$1-icc$2.out
 }
 
 gcc-seq() {
@@ -70,17 +70,17 @@ do-lab() {
     lab-clean
     gcc-seq $lab $1 $2
     gcc-par $lab 2 $1 $2
-    # gcc-par $lab 4 $1 $2
-    # gcc-par $lab 10 $1 $2
-    # gcc-par $lab 100 $1 $2
+    gcc-par $lab 4 $1 $2
+    gcc-par $lab 10 $1 $2
+    gcc-par $lab 100 $1 $2
     cc-seq $lab $1 $2
     cc-par $lab 2 $1 $2
-    # cc-par $lab 4 $1 $2
-    # cc-par $lab 10 $1 $2
-    # cc-par $lab 100 $1 $2
+    cc-par $lab 4 $1 $2
+    cc-par $lab 10 $1 $2
+    cc-par $lab 100 $1 $2
     icc-seq $lab $1 $2
     icc-par $lab 2 $1 $2
-    # icc-par $lab 4 $1 $2
-    # icc-par $lab 10 $1 $2
-    # icc-par $lab 100 $1 $2
+    icc-par $lab 4 $1 $2
+    icc-par $lab 10 $1 $2
+    icc-par $lab 100 $1 $2
 }

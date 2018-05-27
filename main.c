@@ -4,7 +4,7 @@
 #include <math.h>
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 2
+#define NUMBER_OF_TESTS 20
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0

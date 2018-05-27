@@ -4,3 +4,5 @@ build/
 *.jpg
 *.zip
 *.out
+fw/
+*.tar.gz
