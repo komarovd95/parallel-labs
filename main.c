@@ -7,7 +7,7 @@
 #include "fwSignal.h"
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 1
+#define NUMBER_OF_TESTS 20
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
@@ -110,9 +110,9 @@ int main(int argc, char* argv[]) {
 
     n = atoi(argv[1]);
     seed = (unsigned int) atoi(argv[2]);
-    // m = (unsigned int) atoi(argv[3]);
+    m = (unsigned int) atoi(argv[3]);
 
-    // fwSetNumThreads(m);
+    fwSetNumThreads(m);
     best_time = MAX_EXECUTION_TIME;
     for (i = 0; i < NUMBER_OF_TESTS; ++i) {
         struct timeval start, end;
