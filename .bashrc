@@ -32,17 +32,17 @@ build-framewave() {
 }
 
 fw-compile() {
-    gcc -m64 -std=C99 main.c -O3-o build/lab$1-gcc-fw.out -Ifw/$2 -Lfw/$2/lib -lfwBase -lfwImage -lfwSignal
+    gcc -m64 main.c -O3 -fopenmp -Ifw/$2 -Lfw/$2/lib -lm -lfwBase -lfwImage -lfwSignal -lpthread -o build/lab$1-gcc-fw.out
 }
 
 do-lab() {
     lab-clean
-    build-framewave $1 $2 1
-    build-framewave $1 $2 2
-    build-framewave $1 $2 3
     build-framewave $1 $2 4
-    build-framewave $1 $2 10
-    build-framewave $1 $2 100
+    # build-framewave $1 $2 2
+    # build-framewave $1 $2 3
+    # build-framewave $1 $2 4
+    # build-framewave $1 $2 10
+    # build-framewave $1 $2 100
 }
 
 lab-exp() {

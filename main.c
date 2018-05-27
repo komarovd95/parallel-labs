@@ -7,7 +7,7 @@
 #include "fwSignal.h"
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 20
+#define NUMBER_OF_TESTS 2
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
@@ -156,22 +156,23 @@ Fw64f do_work(int n, unsigned int seed) {
     m2_size = n / 2;
 
     m1 = generate_m1(m1_size, &seed);
-    m2 = generate_m2(m2_size, &seed);
+    // m2 = generate_m2(m2_size, &seed);
 
-    map_m1(m1_size, m1);
-    map_m2(m2_size, m2);
+    // map_m1(m1_size, m1);
+    // map_m2(m2_size, m2);
 
-    merge(m2_size, m1, m2);
+    // merge(m2_size, m1, m2);
 
-    sort(m2_size, m2);
+    // sort(m2_size, m2);
 
-    min_value = min_positive(m2_size, m2);
-    if (min_value == 0.0) {
-        printf("Failed to find minimal value :(\n");
-        exit(100);
-    }
+    // min_value = min_positive(m2_size, m2);
+    // if (min_value == 0.0) {
+    //     printf("Failed to find minimal value :(\n");
+    //     exit(100);
+    // }
 
-    return reduce(m2_size, m2, min_value);
+    // return reduce(m2_size, m2, min_value);
+    return 0.0;
 }
 
 Fw64f *generate_m1(int n, unsigned int *seed) {
@@ -182,8 +183,8 @@ Fw64f *generate_m1(int n, unsigned int *seed) {
     for (i = 0; i < n; ++i) {
         array[i] = (Fw64f) rand_r(seed);
     }
-    fwsDivC_64f_I((Fw64f) RAND_MAX, array, n);
-    fwsMulC_64f_I((Fw64f) (A - 1.0), array, n);
+    // fwsDivC_64f_I((Fw64f) RAND_MAX, array, n);
+    // fwsMulC_64f_I((Fw64f) (A - 1.0), array, n);
     fwsAddC_64f_I((Fw64f) 1.0, array, n);
     return array;
 }
