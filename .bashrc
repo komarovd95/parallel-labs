@@ -24,10 +24,8 @@ build-framewave() {
         wget -O ./fw/framewave.tar.gz https://sourceforge.net/projects/framewave/files/framewave-releases/Framewave%201.3.1/$version.tar.gz/download
         tar -xvzf ./fw/framewave.tar.gz -C ./fw
         create-links $version
+        export LD_LIBRARY_PATH=$PWD/fw/$version/lib:$LD_LIBRARY_PATH
     fi
-
-    export LD_LIBRARY_PATH=$PWD/fw/$version/lib:$LD_LIBRARY_PATH
-    echo $LD_LIBRARY_PATH
     fw-compile 2 $version && lab-exp $1 $2 2 gcc-fw $3
 }
 
@@ -37,12 +35,12 @@ fw-compile() {
 
 do-lab() {
     lab-clean
+    build-framewave $1 $2 1
+    build-framewave $1 $2 2
+    build-framewave $1 $2 3
     build-framewave $1 $2 4
-    # build-framewave $1 $2 2
-    # build-framewave $1 $2 3
-    # build-framewave $1 $2 4
-    # build-framewave $1 $2 10
-    # build-framewave $1 $2 100
+    build-framewave $1 $2 10
+    build-framewave $1 $2 100
 }
 
 lab-exp() {
