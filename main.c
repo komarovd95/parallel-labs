@@ -86,7 +86,7 @@ double reduce(int n, double *array, double min);
 
 /**
  * Apply sum function to pairs of zipped arrays.
- * 
+ *
  * @param left result array
  * @param right an array
  * @param len size of zipped arrays
@@ -130,9 +130,9 @@ int main(int argc, char* argv[]) {
         if (i == 0) {
             expected_result = work_result;
         } else if (fabs(expected_result - work_result) > EPS) {
-            printf("\nFailed to verify result of work: expected=%.5f actual=%.5f", 
+            printf("\nFailed to verify result of work: expected=%.5f actual=%.5f",
                 expected_result, work_result);
-            return 1; 
+            return 1;
         }
 #ifdef DEBUG
         printf("Work result = %lf\n", work_result);
@@ -185,6 +185,7 @@ double *generate_m1(int n, unsigned int *seed) {
     for (i = 0; i < n; ++i) {
         array[i] = (double) rand_r(seed);
     }
+    #pragma omp parallel for default(none) private(i) shared(array)
     for (i = 0; i < n; ++i) {
         double val;
         val = array[i];
@@ -198,6 +199,7 @@ double *generate_m1(int n, unsigned int *seed) {
 
 void map_m1(int n, double *m1) {
     int i;
+    #pragma omp parallel for default(none) private(i) shared(m1)
     for (i = 0; i < n; ++i) {
         m1[i] = sqrt(m1[i] / M_E);
     }
@@ -211,6 +213,7 @@ double *generate_m2(int n, unsigned int *seed) {
     for (i = 0; i < n; ++i) {
         array[i] = (double) rand_r(seed);
     }
+    #pragma omp parallel for default(none) private(i) shared(array)
     for (i = 0; i < n; ++i) {
         double val;
         val = array[i];
@@ -227,12 +230,14 @@ void map_m2(int n, double *m2) {
     double *temp;
 
     temp = malloc(sizeof(double) * n);
+    #pragma omp parallel for default(none) private(i) shared(m2, temp)
     for (i = 0; i < n; ++i) {
         temp[i] = m2[i];
     }
 
     zip_sum(m2 + 1, temp, n - 1);
 
+    #pragma omp parallel for default(none) private(i) shared(m2)
     for (i = 0; i < n; ++i) {
         m2[i] = fabs(tan(m2[i]));
     }
@@ -240,6 +245,7 @@ void map_m2(int n, double *m2) {
 
 void zip_sum(double *left, double *right, int len) {
     int i;
+    #pragma omp parallel for default(none) private(i) shared(left, right)
     for (i = 0; i < len; ++i) {
         left[i] += right[i];
     }
@@ -247,11 +253,15 @@ void zip_sum(double *left, double *right, int len) {
 
 void merge(int n, double *m1, double *m2) {
     int i;
+    #pragma omp parallel for default(none) private(i) shared(m1, m2)
     for (i = 0; i < n; ++i) {
         m2[i] *= m1[i];
     }
 }
 
+/**
+ * Параллелизм нарушает инварианты алгоритма
+ */
 void sort(int n, double *array) {
     int i, j;
     double key;
@@ -265,6 +275,9 @@ void sort(int n, double *array) {
     }
 }
 
+/**
+ * Поиск последовательный
+ */
 double min_positive(int n, double *array) {
     int i;
     for (i = 0; i < n; ++i) {
@@ -280,6 +293,7 @@ double reduce(int n, double *array, double min) {
     double sum;
 
     sum = 0.0;
+    #pragma omp parallel for default(none) private(i) shared(array, min) reduction(+:sum)
     for (i = 0; i < n; ++i) {
         double value;
 
