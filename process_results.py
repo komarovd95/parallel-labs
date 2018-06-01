@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import statistics
 import pygal
 
-regexp = re.compile('lab(\d+)-(\w+)-(\d+)\.txt')
+regexp = re.compile('lab(\d+)-(\w+|\w+-\w+-\w+-\w+-\w+)-(\d+)\.txt')
 dir_path = './build'
 source_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f)) and regexp.match(f)]
 
@@ -28,26 +28,14 @@ for file_name in source_files:
 
 expiremental_data = sorted(expiremental_data.items())
 
-compilers = [
-    ("gcc1", 1),
-    ("gcc2", 2),
-    ("gcc4", 4),
-    ("gcc10", 10),
-    ("gcc100", 100),
-    ("cc1", 1),
-    ("cc2", 2),
-    ("cc4", 4),
-    ("cc10", 10),
-    ("cc100", 100),
-    ("icc1", 1),
-    ("icc2", 2),
-    ("icc4", 4),
-    ("icc10", 10),
-    ("icc100", 100)
-]
+compilers = []
+for schedule_type in ["static", "dynamic", "guided"]:
+    for chunk_size in [1, 2, 8, 64, 1024]:
+        for n_threads in [2, 4, 10, 100]:
+            compilers.append(("gcc-omp-{}-{}-{}".format(n_threads, schedule_type, chunk_size), n_threads))
 
 # table
-table_data = {compiler_name: [] for (compiler_name, _) in compilers}
+table_data = {compiler[0]: [] for compiler in compilers}
 for (n, (_, compilers_data)) in expiremental_data:
     for (compiler, _) in compilers:
         compiler_data = compilers_data[compiler]
@@ -82,6 +70,8 @@ for (n, (_, compilers_data)) in expiremental_data:
 for (compiler, _) in compilers:
     full_plot.add(compiler, full_plot_data[compiler])
 full_plot.render_to_png("./build/full-plot.png")
+
+exit()
 
 # speed up plots
 def speed_up_plots(name, seq_compiler, compilers_info):

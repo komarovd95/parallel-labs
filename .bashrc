@@ -58,7 +58,11 @@ omp-compile() {
 }
 
 omp-run() {
-    clean
+    export OMP_NUM_THREADS=$3
+    export OMP_SCHEDULE="$4, $5"
+    echo $OMP_NUM_THREADS
+    echo $OMP_SCHEDULE
+    omp-compile 3 && lab-exp $1 $2 3 gcc-omp-$3-$4-$5
 }
 
 
@@ -69,27 +73,74 @@ lab-exp() {
     counter=$1
     while [ $counter -le $2 ]; do
         echo $4 $counter
-        ./build/lab$3-$4.out $counter 47 > build/lab$3-$4-$counter.txt
+        ./build/lab$3-gcc-omp.out $counter 47 > build/lab$3-$4-$counter.txt
         counter=$(( $counter + $step ))
     done
 }
 
 do-lab() {
-    lab=1
+    lab=3
     # lab-clean
-    # gcc-seq $lab $1 $2
-    # gcc-par $lab 2 $1 $2
-    # gcc-par $lab 4 $1 $2
-    # gcc-par $lab 10 $1 $2
-    # gcc-par $lab 100 $1 $2
-    # cc-seq $lab $1 $2
-    # cc-par $lab 2 $1 $2
-    # cc-par $lab 4 $1 $2
-    # cc-par $lab 10 $1 $2
-    # cc-par $lab 100 $1 $2
-    icc-seq $lab $1 $2
-    icc-par $lab 2 $1 $2
-    icc-par $lab 4 $1 $2
-    icc-par $lab 10 $1 $2
-    icc-par $lab 100 $1 $2
+    # omp-run $1 $2 2 static 1
+    # omp-run $1 $2 2 static 2
+    # omp-run $1 $2 2 static 8
+    # omp-run $1 $2 2 static 64
+    # omp-run $1 $2 2 static 1024
+    # omp-run $1 $2 4 static 1
+    # omp-run $1 $2 4 static 2
+    # omp-run $1 $2 4 static 8
+    # omp-run $1 $2 4 static 64
+    # omp-run $1 $2 4 static 1024
+    # omp-run $1 $2 10 static 1
+    # omp-run $1 $2 10 static 2
+    # omp-run $1 $2 10 static 8
+    # omp-run $1 $2 10 static 64
+    # omp-run $1 $2 10 static 1024
+    # omp-run $1 $2 100 static 1
+    # omp-run $1 $2 100 static 2
+    # omp-run $1 $2 100 static 8
+    # omp-run $1 $2 100 static 64
+    # omp-run $1 $2 100 static 1024
+
+    # omp-run $1 $2 2 dynamic 1
+    # omp-run $1 $2 2 dynamic 2
+    # omp-run $1 $2 2 dynamic 8
+    # omp-run $1 $2 2 dynamic 64
+    # omp-run $1 $2 2 dynamic 1024
+    # omp-run $1 $2 4 dynamic 1
+    # omp-run $1 $2 4 dynamic 2
+    # omp-run $1 $2 4 dynamic 8
+    # omp-run $1 $2 4 dynamic 64
+    # omp-run $1 $2 4 dynamic 1024
+    # omp-run $1 $2 10 dynamic 1
+    # omp-run $1 $2 10 dynamic 2
+    # omp-run $1 $2 10 dynamic 8
+    # omp-run $1 $2 10 dynamic 64
+    # omp-run $1 $2 10 dynamic 1024
+    # omp-run $1 $2 100 dynamic 1
+    # omp-run $1 $2 100 dynamic 2
+    # omp-run $1 $2 100 dynamic 8
+    # omp-run $1 $2 100 dynamic 64
+    # omp-run $1 $2 100 dynamic 1024
+
+    omp-run $1 $2 2 guided 1
+    omp-run $1 $2 2 guided 2
+    omp-run $1 $2 2 guided 8
+    omp-run $1 $2 2 guided 64
+    omp-run $1 $2 2 guided 1024
+    omp-run $1 $2 4 guided 1
+    omp-run $1 $2 4 guided 2
+    omp-run $1 $2 4 guided 8
+    omp-run $1 $2 4 guided 64
+    omp-run $1 $2 4 guided 1024
+    omp-run $1 $2 10 guided 1
+    omp-run $1 $2 10 guided 2
+    omp-run $1 $2 10 guided 8
+    omp-run $1 $2 10 guided 64
+    omp-run $1 $2 10 guided 1024
+    omp-run $1 $2 100 guided 1
+    omp-run $1 $2 100 guided 2
+    omp-run $1 $2 100 guided 8
+    omp-run $1 $2 100 guided 64
+    omp-run $1 $2 100 guided 1024
 }

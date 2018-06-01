@@ -5,7 +5,7 @@
 #include "omp.h"
 
 #define EPS 1e-6
-#define NUMBER_OF_TESTS 20
+#define NUMBER_OF_TESTS 10
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
@@ -204,7 +204,7 @@ double *generate_m1(int n, unsigned int *seed) {
         array[i] = (double) rand_r(seed);
     }
 
-    // #pragma omp parallel for default(none) private(i) shared(array,n)
+    #pragma omp parallel for default(none) private(i) shared(array,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         double val;
         val = array[i];
@@ -218,7 +218,7 @@ double *generate_m1(int n, unsigned int *seed) {
 
 void map_m1(int n, double *m1) {
     int i;
-    // #pragma omp parallel for default(none) private(i) shared(m1,n)
+    #pragma omp parallel for default(none) private(i) shared(m1,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         m1[i] = sqrt(m1[i] / M_E);
     }
@@ -236,7 +236,7 @@ double *generate_m2(int n, unsigned int *seed) {
         array[i] = (double) rand_r(seed);
     }
 
-    // #pragma omp parallel for default(none) private(i) shared(array,n)
+    #pragma omp parallel for default(none) private(i) shared(array,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         double val;
         val = array[i];
@@ -253,14 +253,14 @@ void map_m2(int n, double *m2) {
     double *temp;
 
     temp = malloc(sizeof(double) * n);
-    // #pragma omp parallel for default(none) private(i) shared(temp,m2,n)
+    #pragma omp parallel for default(none) private(i) shared(temp,m2,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         temp[i] = m2[i];
     }
 
     zip_sum(m2 + 1, temp, n - 1);
 
-    // #pragma omp parallel for default(none) private(i) shared(m2,n)
+    #pragma omp parallel for default(none) private(i) shared(m2,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         m2[i] = fabs(tan(m2[i]));
     }
@@ -269,7 +269,7 @@ void map_m2(int n, double *m2) {
 
 void zip_sum(double *left, double *right, int len) {
     int i;
-    // #pragma omp parallel for default(none) private(i) shared(left,right,len)
+    #pragma omp parallel for default(none) private(i) shared(left,right,len) schedule(runtime)
     for (i = 0; i < len; ++i) {
         left[i] += right[i];
     }
@@ -277,7 +277,7 @@ void zip_sum(double *left, double *right, int len) {
 
 void merge(int n, double *m1, double *m2) {
     int i;
-    // #pragma omp parallel for default(none) private(i) shared(m1,m2,n)
+    #pragma omp parallel for default(none) private(i) shared(m1,m2,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         m2[i] *= m1[i];
     }
@@ -291,7 +291,7 @@ void rs_sort(int n, double *array) {
     chunk_size = CHUNK_SIZE;
     chunks = (n + chunk_size - 1) / chunk_size;
 
-    // #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n)
+    #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n) schedule(runtime)
     for (chunk_n = 0; chunk_n < chunks; ++chunk_n) {
         int subsize;
         subsize = n - chunk_size * chunk_n;
@@ -301,7 +301,7 @@ void rs_sort(int n, double *array) {
 
     for (; chunk_size < n; chunk_size *= 2) {
         chunks = (n + chunk_size - 1) / chunk_size;
-        // #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n)
+        #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n) schedule(runtime)
         for (chunk_n = 0; chunk_n < chunks; chunk_n += 2) {
             double *temp;
             int temp_size;
@@ -371,7 +371,7 @@ double reduce(int n, double *array, double min) {
     double sum;
 
     sum = 0.0;
-    // #pragma omp parallel for default(none) private(i) shared(array,min,n) reduction(+:sum)
+    #pragma omp parallel for default(none) private(i) shared(array,min,n) reduction(+:sum) schedule(runtime)
     for (i = 0; i < n; ++i) {
         double value;
 
