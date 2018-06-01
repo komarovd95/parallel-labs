@@ -2,12 +2,14 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
+#include "omp.h"
 
 #define EPS 1e-6
 #define NUMBER_OF_TESTS 20
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
+#define CHUNK_SIZE 64
 
 /**
  * Generates a random array of given size and seed.
@@ -63,6 +65,15 @@ void merge(int n, double *m1, double *m2);
  * @param array an array
  */
 void sort(int n, double *array);
+
+/**
+ * Sorts given array using parallelization.
+ * Inspired by Regular Sampling Parallel Sort Algorithm.
+ *
+ * @param n size of given array
+ * @param array an array
+ */
+void rs_sort(int n, double *array);
 
 /**
  * Finds minimal positive element of given array.
@@ -154,6 +165,7 @@ double do_work(int n, unsigned int seed) {
     double *m1, *m2;
     int m1_size, m2_size;
     double min_value;
+    double x;
 
     m1_size = n;
     m2_size = n / 2;
@@ -166,7 +178,7 @@ double do_work(int n, unsigned int seed) {
 
     merge(m2_size, m1, m2);
 
-    sort(m2_size, m2);
+    rs_sort(m2_size, m2);
 
     min_value = min_positive(m2_size, m2);
     if (min_value == 0.0) {
@@ -174,7 +186,10 @@ double do_work(int n, unsigned int seed) {
         exit(100);
     }
 
-    return reduce(m2_size, m2, min_value);
+    x = reduce(m2_size, m2, min_value);
+    free(m1);
+    free(m2);
+    return x;
 }
 
 double *generate_m1(int n, unsigned int *seed) {
@@ -182,9 +197,14 @@ double *generate_m1(int n, unsigned int *seed) {
     double *array;
 
     array = malloc(sizeof(double) * n);
+    /**
+     * Loop has dependency. Inefficient parallelization/
+     */
     for (i = 0; i < n; ++i) {
         array[i] = (double) rand_r(seed);
     }
+
+    // #pragma omp parallel for default(none) private(i) shared(array,n)
     for (i = 0; i < n; ++i) {
         double val;
         val = array[i];
@@ -198,6 +218,7 @@ double *generate_m1(int n, unsigned int *seed) {
 
 void map_m1(int n, double *m1) {
     int i;
+    // #pragma omp parallel for default(none) private(i) shared(m1,n)
     for (i = 0; i < n; ++i) {
         m1[i] = sqrt(m1[i] / M_E);
     }
@@ -208,9 +229,14 @@ double *generate_m2(int n, unsigned int *seed) {
     double *array;
 
     array = malloc(sizeof(double) * n);
+    /**
+     * Loop has dependency. Inefficient parallelization/
+     */
     for (i = 0; i < n; ++i) {
         array[i] = (double) rand_r(seed);
     }
+
+    // #pragma omp parallel for default(none) private(i) shared(array,n)
     for (i = 0; i < n; ++i) {
         double val;
         val = array[i];
@@ -227,19 +253,23 @@ void map_m2(int n, double *m2) {
     double *temp;
 
     temp = malloc(sizeof(double) * n);
+    // #pragma omp parallel for default(none) private(i) shared(temp,m2,n)
     for (i = 0; i < n; ++i) {
         temp[i] = m2[i];
     }
 
     zip_sum(m2 + 1, temp, n - 1);
 
+    // #pragma omp parallel for default(none) private(i) shared(m2,n)
     for (i = 0; i < n; ++i) {
         m2[i] = fabs(tan(m2[i]));
     }
+    free(temp);
 }
 
 void zip_sum(double *left, double *right, int len) {
     int i;
+    // #pragma omp parallel for default(none) private(i) shared(left,right,len)
     for (i = 0; i < len; ++i) {
         left[i] += right[i];
     }
@@ -247,14 +277,72 @@ void zip_sum(double *left, double *right, int len) {
 
 void merge(int n, double *m1, double *m2) {
     int i;
+    // #pragma omp parallel for default(none) private(i) shared(m1,m2,n)
     for (i = 0; i < n; ++i) {
         m2[i] *= m1[i];
     }
 }
 
+void rs_sort(int n, double *array) {
+    int chunks;
+    int chunk_size;
+    int chunk_n;
+
+    chunk_size = CHUNK_SIZE;
+    chunks = (n + chunk_size - 1) / chunk_size;
+
+    // #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n)
+    for (chunk_n = 0; chunk_n < chunks; ++chunk_n) {
+        int subsize;
+        subsize = n - chunk_size * chunk_n;
+        subsize = subsize < chunk_size ? subsize : chunk_size;
+        sort(subsize, array + chunk_n * chunk_size);
+    }
+
+    for (; chunk_size < n; chunk_size *= 2) {
+        chunks = (n + chunk_size - 1) / chunk_size;
+        // #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n)
+        for (chunk_n = 0; chunk_n < chunks; chunk_n += 2) {
+            double *temp;
+            int temp_size;
+            int i, j, k;
+            int chunk_0, chunk_1, chunk_2;
+
+            temp = malloc(sizeof(double) * chunk_size * 2);
+
+            chunk_0 = chunk_n * chunk_size;
+            chunk_1 = chunk_0 + chunk_size;
+            chunk_2 = chunk_1 + chunk_size;
+
+            temp_size = 0;
+            for (j = chunk_0, k = chunk_1; j < n && k < n && j < chunk_1 && k < chunk_2;) {
+                if (array[j] < array[k]) {
+                    temp[temp_size++] = array[j++];
+                } else {
+                    temp[temp_size++] = array[k++];
+                }
+            }
+            while (j < n && j < chunk_1) {
+                temp[temp_size++] = array[j++];
+            }
+            while (k < n && k < chunk_2) {
+                temp[temp_size++] = array[k++];
+            }
+            for (i = 0; i < temp_size; ++i) {
+                array[chunk_0 + i] = temp[i];
+            }
+            free(temp);
+        }
+    }
+}
+
+/**
+ * Sorting algorithm invariants will be broken while parallelizing
+ */
 void sort(int n, double *array) {
     int i, j;
     double key;
+    int lo, hi, m;
 
     for (i = 1; i < n; ++i) {
         key = array[i];
@@ -265,6 +353,9 @@ void sort(int n, double *array) {
     }
 }
 
+/**
+ * This method has O(1) complexity in common case
+ */
 double min_positive(int n, double *array) {
     int i;
     for (i = 0; i < n; ++i) {
@@ -280,6 +371,7 @@ double reduce(int n, double *array, double min) {
     double sum;
 
     sum = 0.0;
+    // #pragma omp parallel for default(none) private(i) shared(array,min,n) reduction(+:sum)
     for (i = 0; i < n; ++i) {
         double value;
 

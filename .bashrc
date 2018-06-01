@@ -53,6 +53,15 @@ icc-par() {
     icc-par-compile $1 $2 && lab-exp $3 $4 $1 icc$2
 }
 
+omp-compile() {
+    gcc main.c -O3 -fopenmp -lm -o build/lab$1-gcc-omp.out
+}
+
+omp-run() {
+    clean
+}
+
+
 lab-exp() {
     # set -e
     diff=$(( $2 - $1 ))
@@ -67,17 +76,17 @@ lab-exp() {
 
 do-lab() {
     lab=1
-    lab-clean
-    gcc-seq $lab $1 $2
-    gcc-par $lab 2 $1 $2
-    gcc-par $lab 4 $1 $2
-    gcc-par $lab 10 $1 $2
-    gcc-par $lab 100 $1 $2
-    cc-seq $lab $1 $2
-    cc-par $lab 2 $1 $2
-    cc-par $lab 4 $1 $2
-    cc-par $lab 10 $1 $2
-    cc-par $lab 100 $1 $2
+    # lab-clean
+    # gcc-seq $lab $1 $2
+    # gcc-par $lab 2 $1 $2
+    # gcc-par $lab 4 $1 $2
+    # gcc-par $lab 10 $1 $2
+    # gcc-par $lab 100 $1 $2
+    # cc-seq $lab $1 $2
+    # cc-par $lab 2 $1 $2
+    # cc-par $lab 4 $1 $2
+    # cc-par $lab 10 $1 $2
+    # cc-par $lab 100 $1 $2
     icc-seq $lab $1 $2
     icc-par $lab 2 $1 $2
     icc-par $lab 4 $1 $2
