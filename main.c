@@ -10,6 +10,7 @@
 #define USEC_IN_SECOND 1000000L
 #define MAX_EXECUTION_TIME 10000000000L // 10s
 #define A 637.0
+#define CHUNK_SIZE 64
 
 /**
  * Generates a random array of given size and seed.
@@ -56,6 +57,9 @@ void map_m2(int n, Fw64f *m2);
  * @param m2 a M2 array
  */
 void merge(int n, Fw64f *m1, Fw64f *m2);
+
+
+void rs_sort(int n, Fw64f *array);
 
 /**
  * Sorts given array using Insertion Sort algorithm.
@@ -150,6 +154,7 @@ Fw64f do_work(int n, unsigned int seed) {
     Fw64f *m1, *m2;
     int m1_size, m2_size;
     Fw64f min_value;
+    Fw64f x;
 
     m1_size = n;
     m2_size = n / 2;
@@ -162,7 +167,7 @@ Fw64f do_work(int n, unsigned int seed) {
 
     merge(m2_size, m1, m2);
 
-    sort(m2_size, m2);
+    rs_sort(m2_size, m2);
 
     min_value = min_positive(m2_size, m2);
     if (min_value == 0.0) {
@@ -170,7 +175,10 @@ Fw64f do_work(int n, unsigned int seed) {
         exit(100);
     }
 
-    return reduce(m2_size, m2, min_value);
+    x = reduce(m2_size, m2, min_value);
+    fwsFree(m1);
+    fwsFree(m2);
+    return x;
 }
 
 Fw64f *generate_m1(int n, unsigned int *seed) {
@@ -219,6 +227,61 @@ void map_m2(int n, Fw64f *m2) {
 
 void merge(int n, Fw64f *m1, Fw64f *m2) {
     fwsMul_64f_I(m1, m2, n);
+}
+
+void rs_sort(int n, Fw64f *array) {
+    int chunks;
+    int chunk_size;
+    int chunk_n;
+
+    chunk_size = CHUNK_SIZE;
+    chunks = (n + chunk_size - 1) / chunk_size;
+
+    for (chunk_n = 0; chunk_n < chunks; ++chunk_n) {
+        int subsize;
+        subsize = n - chunk_size * chunk_n;
+        subsize = subsize < chunk_size ? subsize : chunk_size;
+        sort(subsize, array + chunk_n * chunk_size);
+    }
+
+    for (; chunk_size < n; chunk_size *= 2) {
+        chunks = (n + chunk_size - 1) / chunk_size;
+        for (chunk_n = 0; chunk_n < chunks; chunk_n += 2) {
+            Fw64f *temp;
+            int temp_size;
+            int i, j, k;
+            int chunk_0, chunk_1, chunk_2;
+
+            temp = fwsMalloc_64f(chunk_size * 2);
+
+            chunk_0 = chunk_n * chunk_size;
+            chunk_1 = chunk_0 + chunk_size;
+            chunk_2 = chunk_1 + chunk_size;
+
+            temp_size = 0;
+            for (j = chunk_0, k = chunk_1; j < n && k < n && j < chunk_1 && k < chunk_2;) {
+                if (array[j] < array[k]) {
+                    temp[temp_size++] = array[j++];
+                } else {
+                    temp[temp_size++] = array[k++];
+                }
+            }
+            if (j < n && j < chunk_1) {
+                int m;
+                m = (n - j) < (chunk_1 - j) ? (n - j) : (chunk_1 - j);
+                fwsMove_64f(array + j, temp + temp_size, m);
+                temp_size += m;
+            }
+            if (k < n && k < chunk_2) {
+                int m;
+                m = (n - k) < (chunk_2 - k) ? (n - k) : (chunk_2 - k);
+                fwsMove_64f(array + k, temp + temp_size, m);
+                temp_size += m;
+            }
+            fwsMove_64f(temp, array + chunk_0, temp_size);
+            fwsFree(temp);
+        }
+    }
 }
 
 void sort(int n, Fw64f *array) {

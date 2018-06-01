@@ -17,7 +17,6 @@ create-links() {
 }
 
 build-framewave() {
-    echo $1 $2 $3
     version=FW_1.3.1_Lin64
     if [ ! -d "$PWD/fw" ]; then
         mkdir fw
@@ -30,7 +29,7 @@ build-framewave() {
 }
 
 fw-compile() {
-    gcc -m64 main.c -O3 -fopenmp -Ifw/$2 -Lfw/$2/lib -lm -lfwBase -lfwImage -lfwSignal -lpthread -o build/lab$1-gcc-fw.out
+    gcc -m64 main.c -O3 -Ifw/$2 -Lfw/$2/lib -lm -lfwBase -lfwImage -lfwSignal -o build/lab$1-gcc-fw.out
 }
 
 do-lab() {
@@ -45,7 +44,6 @@ do-lab() {
 
 lab-exp() {
     # set -e
-    echo $1 $2 $3 $4 $5
     diff=$(( $2 - $1 ))
     step=$(( $diff / 10 ))
     counter=$1
