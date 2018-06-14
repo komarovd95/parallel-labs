@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import statistics
 import pygal
 
-regexp = re.compile('lab(\d+)-(\w+|\w+-\w+-\w+-\w+-\w+)-(\d+)\.txt')
+regexp = re.compile('lab(\d+)-(\w+-\w+|\w+-\w+-\w+-\w+-\w+-\w+)-(\d+)\.txt')
 dir_path = './build'
 source_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f)) and regexp.match(f)]
 
@@ -21,27 +21,28 @@ for file_name in source_files:
     (x, compilers_data) = expiremental_data[n]
     f = open(join(dir_path, file_name), 'r')
     samples = [sample.split(";") for sample in f]
-    compiler_data = sorted([(int(sample[0]) / 1000.0, float(sample[1])) for sample in samples], key=lambda k: k[0])[1:-1]
+    compiler_data = sorted([(float(sample[0]) / 1000.0, float(sample[1])) for sample in samples], key=lambda k: k[0])[1:-1]
     compiler_name = file_name_match.group(2)
     compilers_data[compiler_name] = compiler_data
     expiremental_data[n] = (x, compilers_data)
 
 expiremental_data = sorted(expiremental_data.items())
 
-compilers = []
-for schedule_type in ["static", "dynamic", "guided"]:
-    for chunk_size in [1, 2, 8, 64, 1024]:
-        for n_threads in [2, 4, 10, 100]:
-            compilers.append(("gcc-omp-{}-{}-{}".format(n_threads, schedule_type, chunk_size), n_threads))
+sched_types = [
+    ('dynamic', 1)
+]
 
-additional_data = []
-for schedule_type in ["static", "dynamic", "guided"]:
-    for chunk_size in [1, 2, 8, 64, 1024]:
-        for n_threads in [2, 4, 10, 100]:
-            additional_data.append(("gcc-omp-{}-{}-{}".format(n_threads, schedule_type, chunk_size), n_threads, schedule_type, chunk_size))
+compilers = []
+for sort_type in [0, 1, 2]:
+    compilers.append(("gcc-{}".format(sort_type), 1))
+
+for (schedule_type, chunk_size) in sched_types:
+    for n_threads in [2, 4, 10, 100]:
+        for sort_type in [0, 1, 2]:
+            compilers.append(("gcc-omp-{}-{}-{}-{}".format(n_threads, schedule_type, chunk_size, sort_type), n_threads))
 
 # table
-table_data = {compiler[0]: [] for compiler in compilers}
+table_data = {compiler: [] for (compiler, _) in compilers}
 for (n, (_, compilers_data)) in expiremental_data:
     for (compiler, _) in compilers:
         compiler_data = compilers_data[compiler]
@@ -54,7 +55,7 @@ table_file.close()
 
 # confidence intervals
 ts = {17: 2.11, 7: 2.365}
-table_file = open(join(dir_path, "table-lab3-conf-intervals.csv"), 'w')
+table_file = open(join(dir_path, "table-lab{}-conf-intervals.csv".format(lab_number)), 'w')
 for (compiler, _) in compilers:
     conf_intervals = []
     for (n, (_, compilers_data)) in expiremental_data:
@@ -72,105 +73,50 @@ table_file.close()
 def draw_bp(w_size, compilers_data, compilers_f, sched_type):
     box_plot = pygal.Box(y_title="Время выполнения, мс")
     box_plot.title = "Размер задачи {}, {}".format(w_size, sched_type)
-    for (compiler, n_threads, _, chunk_size) in compilers_f:
+    for (compiler, _) in compilers_f:
         samples = compilers_data[compiler]
-        box_plot.add("{}, {}".format(chunk_size, n_threads), [sample[0] for sample in samples])
+        box_plot.add(compiler, [sample[0] for sample in samples])
     box_plot.render_to_png("./build/boxplot-{}-{}.png".format(sched_type, w_size))
 
 for (n, (_, compilers_data)) in expiremental_data:
-    draw_bp(n, compilers_data, additional_data[0:20], "static")
-    draw_bp(n, compilers_data, additional_data[20:40], "dynamic")
-    draw_bp(n, compilers_data, additional_data[40:60], "guided")
+    draw_bp(n, compilers_data, compilers, "mixed")
 
-# full plot
-def draw_fp(chunk_size):
-    compilers_info = [ad for ad in additional_data if ad[3] == chunk_size]
-    full_plot_data = {(n_threads, sched_type): [] for (_, n_threads, sched_type, _) in compilers_info}
-    full_plot = pygal.Line(x_title="Размер задачи", y_title="Время выполнения, с")
-    full_plot.title = "Лучшие результаты, chunk-size={} (среднее время, s)".format(chunk_size)
-    full_plot.x_labels = [str(n) for (n, _) in expiremental_data]
-    for (n, (_, compilers_data)) in expiremental_data:
-        for (compiler, n_threads, sched_type, _) in compilers_info:
-            samples = compilers_data[compiler]
-            data = full_plot_data[(n_threads, sched_type)]
-            data.append(min([sample[0] for sample in samples]) / 1000.0)
+# bar plot
+def draw_brp(scs, compilers_data, file_name):
+    bar_plot = pygal.Bar(y_title="Время выполнения, мс")
+    bar_plot.title = "Parallel Sort {}".format(scs)
+    bar_plot.x_labels = [str(n) for (n, _) in expiremental_data]
+    plot_data = {}
+    for (compiler, n_threads) in compilers_data:
+        if not n_threads in plot_data:
+            plot_data[n_threads] = []
+        pd = plot_data[n_threads]    
+        for (n, (_, data)) in expiremental_data:
+            samples = data[compiler]
+            pd.append(min([sample[0] for sample in samples]))
+    for n in [1, 2, 4, 10, 100]:
+        bar_plot.add(str(n), plot_data[n])
+    bar_plot.render_to_png("./build/barplot-{}.png".format(file_name))    
 
-    for (_, n_threads, sched_type, _) in compilers_info:
-        full_plot.add("{}, {}".format(sched_type, n_threads), full_plot_data[(n_threads, sched_type)])
-    full_plot.render_to_png("./build/full-plot-{}.png".format(chunk_size))
+def draw_brp2(scs, compilers_data, file_name):
+    bar_plot = pygal.Bar(y_title="Время выполнения, мс")
+    bar_plot.title = "Parallel Sort {}".format(scs)
+    bar_plot.x_labels = [str(n) for (n, _) in expiremental_data]
+    plot_data = {}
+    for (compiler, n_threads) in compilers_data:
+        sort_type = compiler[-1]
+        if not sort_type in plot_data:
+            plot_data[sort_type] = []
+        pd = plot_data[sort_type]    
+        for (n, (_, data)) in expiremental_data:
+            samples = data[compiler]
+            pd.append(min([sample[0] for sample in samples]))
+    for (n, t) in [("0", "64"), ("1", "N / 2"), ("2", "N / K")]:
+        bar_plot.add(t, plot_data[n])
+    bar_plot.render_to_png("./build/barplot-{}.png".format(file_name)) 
 
-for chunk_size in [1, 2, 8, 64, 1024]:
-    draw_fp(chunk_size)
+draw_brp("64",    [compilers[0]] + [compiler for compiler in compilers[3:15] if compiler[0].endswith("0")], "64")
+draw_brp("N / 2", [compilers[1]] + [compiler for compiler in compilers[3:15] if compiler[0].endswith("1")], "n2")
+draw_brp("N / K", [compilers[2]] + [compiler for compiler in compilers[3:15] if compiler[0].endswith("2")], "nk")
 
-# speed up plots
-def speed_up_plots(name, seq_compiler, compilers_info):
-    data = {compiler: (threads, []) for (compiler, threads, _, _) in compilers_info}
-    plot = pygal.Line(x_title="Размер задачи", y_title="Ускорение")
-    plot.title = "Параллельное ускорение ({})".format(name)
-    plot.x_labels = [str(n) for (n, _) in expiremental_data]
-
-    for (n, (_, compilers_data)) in expiremental_data:
-        seq_min = compilers_data[seq_compiler][0][0]
-        for (compiler, _, _, _) in compilers_info:
-            comp_min = compilers_data[compiler][0][0]
-            data[compiler][1].append(seq_min / comp_min)
-
-    for (compiler, n_threads, s_type, c_size) in compilers_info:
-        plot.add("{}, {}".format(s_type, c_size), data[compiler][1])
-    plot.render_to_png("./build/{}-speed-up-plot.png".format(name))
-    return data
-
-for nt in [2, 4, 10, 100]:
-    speed_up_plots("all, threads={}".format(nt), "gcc1", [ad for ad in additional_data if ad[1] == nt])
-    
-dynamic_s = speed_up_plots(
-    "all",
-    "gcc1",
-    additional_data
-)
-static_s = speed_up_plots(
-    "static, chunk-size=8",
-    "gcc1",
-    [ad for ad in additional_data if ad[3] == 8 and ad[2] == "static"]
-)
-
-dynamic_s = speed_up_plots(
-    "dynamic, chunk-size=64",
-    "gcc1",
-    [ad for ad in additional_data if ad[3] == 64 and ad[2] == "dynamic"]
-)
-
-guided_s = speed_up_plots(
-    "guided, chunk-size=1", 
-    "gcc1",
-    [ad for ad in additional_data if ad[3] == 1 and ad[2] == "guided"]
-)
-
-# parallel effiency plots
-def parallel_eff_plot(name, speed_up, compilers_info):
-    plot = pygal.Line(x_title="Размер задачи", y_title="Эффективность")
-    plot.title = "Параллельная эффективность ({})".format(name)
-    plot.x_labels = [str(n) for (n, _) in expiremental_data]
-    for (compiler, _, _, _) in compilers_info:
-        (n_threads, data) = speed_up[compiler]
-        plot.add(str(n_threads), [d / n_threads for d in data])
-    plot.render_to_png("./build/{}-eff-plot.png".format(name))
-
-
-parallel_eff_plot(
-    "guided, chunk-size=1", 
-    guided_s, 
-    [ad for ad in additional_data if ad[3] == 1 and ad[2] == "guided"]
-)
-
-parallel_eff_plot(
-    "dynamic, chunk-size=64", 
-    dynamic_s, 
-    [ad for ad in additional_data if ad[3] == 64 and ad[2] == "dynamic"]
-)
-
-parallel_eff_plot(
-    "static, chunk-size=8",
-    static_s,
-    [ad for ad in additional_data if ad[3] == 8 and ad[2] == "static"]
-)
+draw_brp2("(types, threads=4)", [compiler for compiler in compilers[3:15] if compiler[1] == 4], "types")
