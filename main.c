@@ -4,6 +4,8 @@
 #include <math.h>
 #include <unistd.h>
 #include "omp.h"
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
+#include <CL/cl.h>
 
 #define EPS 1e-6
 #define NUMBER_OF_TESTS 10
@@ -42,6 +44,16 @@ double *generate_m1(int n);
 void map_m1(int n, double *m1);
 
 /**
+ * Maps values of given array: m1[i] = sqrt(m1[i] / E)
+ *
+ * @param n size of given array
+ * @param queue the OpenCL command queue
+ * @param kernel the kernel that will be executed
+ * @param buffer the buffer that contains values of M1
+ */
+void map_m1_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem buffer);
+
+/**
  * Generates a random array of given size and seed.
  * An array has even distribution between (A; 10A).
  *
@@ -59,6 +71,19 @@ double *generate_m2(int n);
 void map_m2(int n, double *m2);
 
 /**
+ * Maps values of given array: m2[i] = abs(tan(m2[i] + m2[i-1]))
+ *
+ * @param n size of given array
+ * @param queue the OpenCL command queue
+ * @param copy_kernel the kernel that copies values from M2 to TMP
+ * @param sum_kernel the kernel that sums values of M2 and TMP
+ * @param map_kernel the kernel that maps values of M2
+ * @param m2 the buffer that contains values of M2
+ * @param tmp the buffer that contains values of TMP
+ */
+void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel sum_kernel, cl_kernel map_kernel, cl_mem m2, cl_mem tmp);
+
+/**
  * Merges values of given arrays into M2 array.
  * Applies function to values while merging: f(a, b) = a * b
  *
@@ -67,6 +92,18 @@ void map_m2(int n, double *m2);
  * @param m2 a M2 array
  */
 void merge(int n, double *m1, double *m2);
+
+/**
+ * Merges values of given arrays into M2 array.
+ * Applies function to values while merging: f(a, b) = a * b
+ *
+ * @param n size of M2 array
+ * @param queue the OpenCL command queue
+ * @param kernel the kernel that merges values of M1 and M2
+ * @param m1 a M1 buffer
+ * @param m2 a M2 buffer
+ */
+void merge_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem m1, cl_mem m2);
 
 /**
  * Sorts given array using Insertion Sort algorithm.
@@ -85,25 +122,6 @@ void sort(int n, double *array);
  * @param array an array
  */
 void rs_sort(int n, double *array);
-
-/**
- * Sorts given array using parallelization.
- * Splits array into 2 equal parts, sorts them, then merges into one.
- *
- * @param n size of given array
- * @param array an array
- */
-void rs_sort2(int n, double *array);
-
-/**
- * Sorts given array using parallelization.
- * Splits array into K equal parts, sorts them, then merges into one.
- * K is number of OMP threads.
- *
- * @param n size of given array
- * @param array an array
- */
-void rs_sortK(int n, double *array);
 
 /**
  * Finds minimal positive element of given array.
@@ -146,6 +164,30 @@ void zip_sum(double *left, double *right, int len);
  */
 double do_work(int n);
 
+/**
+ * Prepares OpenCL context.
+ *
+ * @param context the OpenCL context that will be prepared
+ * @param queue the command queue that will be prepared
+ */
+void prepare_opencl_context(cl_context *context, cl_command_queue *queue);
+
+/**
+ * Builds OpenCL program.
+ *
+ * @param program the program that will be built
+ * @param context the prepared OpenCL context
+ * @param file_name the name of file that contains OpenCL kernels
+ */
+void build_opencl_program(cl_program *program, cl_context context, char *file_name);
+
+/**
+ * Reads the given file.
+ * 
+ * @param filename the name of file that will be read
+ */
+char *read_file(char *filename);
+
 int main(int argc, char* argv[]) {
     int n;
     int i;
@@ -177,10 +219,18 @@ int main(int argc, char* argv[]) {
 double do_work(int n) {
     double x;
     int progress;
+    cl_context context;
+    cl_command_queue queue;
+    cl_program program;
 
     progress = 0;
 
-    #pragma omp parallel sections default(none) shared(n,x,progress)
+#ifdef USE_OPENCL
+    prepare_opencl_context(&context, &queue);
+    build_opencl_program(&program, context, "kernels.cl");
+#endif
+
+    #pragma omp parallel sections default(none) shared(n,x,progress,program,queue,context)
     {
         #pragma omp section
         {
@@ -198,8 +248,9 @@ double do_work(int n) {
             double *m1, *m2;
             int m1_size, m2_size;
             double min_value;
-            int sort_type;
             double start, end;
+            cl_kernel map_m1_kernel, map_m2_copy_kernel, map_m2_sum_kernel, map_m2_kernel, merge_kernel;
+            cl_mem cl_m1, cl_m2, cl_tmp;
 
             start = omp_get_wtime();
 
@@ -211,29 +262,45 @@ double do_work(int n) {
             m2 = generate_m2(m2_size);
             progress += 5;
 
+#ifdef USE_OPENCL
+            map_m1_kernel = clCreateKernel(program, "map_m1", NULL);
+            map_m2_copy_kernel = clCreateKernel(program, "map_m2_copy", NULL);
+            map_m2_sum_kernel = clCreateKernel(program, "map_m2_sum", NULL);
+            map_m2_kernel = clCreateKernel(program, "map_m2", NULL);
+            merge_kernel = clCreateKernel(program, "merge", NULL);
+
+            cl_m1 = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(double) * m1_size, NULL, NULL);
+            cl_m2 = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(double) * m2_size, NULL, NULL);
+            cl_tmp = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(double) * m2_size, NULL, NULL);
+#endif
+
+#ifdef USE_OPENCL
+            clEnqueueWriteBuffer(queue, cl_m1, CL_TRUE, 0, sizeof(double) * m1_size, m1, 0, NULL, NULL);
+            map_m1_CL(m1_size, queue, map_m1_kernel, cl_m1);
+            clEnqueueReadBuffer(queue, cl_m1, CL_TRUE, 0, sizeof(double) * m1_size, m1, 0, NULL, NULL);
+#else
             map_m1(m1_size, m1);
+#endif
             progress += 10;
+
+#ifdef USE_OPENCL
+            clEnqueueWriteBuffer(queue, cl_m2, CL_TRUE, 0, sizeof(double) * m2_size, m2, 0, NULL, NULL);
+            map_m2_CL(m2_size, queue, map_m2_copy_kernel, map_m2_sum_kernel, map_m2_kernel, cl_m2, cl_tmp);
+            clEnqueueReadBuffer(queue, cl_m2, CL_TRUE, 0, sizeof(double) * m2_size, m2, 0, NULL, NULL);
+#else
             map_m2(m2_size, m2);
+#endif
             progress += 10;
 
+#ifdef USE_OPENCL
+            merge_CL(m2_size, queue, merge_kernel, cl_m1, cl_m2);
+            clEnqueueReadBuffer(queue, cl_m2, CL_TRUE, 0, sizeof(double) * m2_size, m2, 0, NULL, NULL);
+#else
             merge(m2_size, m1, m2);
+#endif
             progress += 10;
 
-            sort_type = atoi(getenv("LAB_SORT_TYPE"));
-            switch (sort_type) {
-                case 0:
-                    rs_sort(m2_size, m2);
-                    break;
-                case 1:
-                    rs_sort2(m2_size, m2);
-                    break;
-                case 2:
-                    rs_sortK(m2_size, m2);        
-                    break;
-                default:
-                    rs_sort(m2_size, m2);
-                    break;
-            }
+            rs_sort(m2_size, m2);
             progress += 50;
 
             min_value = min_positive(m2_size, m2);
@@ -272,12 +339,36 @@ double *generate_m1(int n) {
     return array;
 }
 
+void map_m1_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem buffer) {
+    cl_event event;
+    cl_ulong startCl, endCl;
+    double start, end;
+    size_t size;
+
+    size = n;
+    start = omp_get_wtime();
+    clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer);
+    clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &size, NULL, 0, NULL, &event);
+    clWaitForEvents(1, &event);
+    end = omp_get_wtime();
+
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &startCl, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &endCl, NULL);
+
+    printf("%ld;%ld;", (long) ((end - start) * USEC_IN_SECOND), (endCl - startCl) / 1000);
+}
+
 void map_m1(int n, double *m1) {
     int i;
+    double start, end;
+
+    start = omp_get_wtime();
     #pragma omp parallel for default(none) private(i) shared(m1,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         m1[i] = sqrt(m1[i] / M_E);
     }
+    end = omp_get_wtime();
+    printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 }
 
 double *generate_m2(int n) {
@@ -302,7 +393,9 @@ double *generate_m2(int n) {
 void map_m2(int n, double *m2) {
     int i;
     double *temp;
+    double start, end;
 
+    start = omp_get_wtime();
     temp = malloc(sizeof(double) * n);
     #pragma omp parallel for default(none) private(i) shared(temp,m2,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
@@ -316,6 +409,45 @@ void map_m2(int n, double *m2) {
         m2[i] = fabs(tan(m2[i]));
     }
     free(temp);
+    end = omp_get_wtime();
+    printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
+}
+
+void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel sum_kernel, cl_kernel map_kernel, cl_mem m2, cl_mem tmp) {
+    cl_ulong startCl, endCl, elapsed;
+    cl_event event;
+    double start, end;
+    size_t size;
+
+    size = n;
+    elapsed = 0;
+    start = omp_get_wtime();
+
+    clSetKernelArg(copy_kernel, 0, sizeof(cl_mem), &m2);
+    clSetKernelArg(copy_kernel, 1, sizeof(cl_mem), &tmp);
+    clEnqueueNDRangeKernel(queue, copy_kernel, 1, NULL, &size, NULL, 0, NULL, &event);
+    clWaitForEvents(1, &event);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &startCl, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &endCl, NULL);
+    elapsed += (endCl - startCl);
+
+    clSetKernelArg(sum_kernel, 0, sizeof(cl_mem), &m2);
+    clSetKernelArg(sum_kernel, 1, sizeof(cl_mem), &tmp);
+    clEnqueueNDRangeKernel(queue, sum_kernel, 1, NULL, &size, NULL, 0, NULL, &event);
+    clWaitForEvents(1, &event);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &startCl, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &endCl, NULL);
+    elapsed += (endCl - startCl);
+
+    clSetKernelArg(map_kernel, 0, sizeof(cl_mem), &m2);
+    clEnqueueNDRangeKernel(queue, map_kernel, 1, NULL, &size, NULL, 0, NULL, &event);
+    clWaitForEvents(1, &event);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &startCl, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &endCl, NULL);
+    elapsed += (endCl - startCl);
+    end = omp_get_wtime();
+
+    printf("%ld;%ld;", (long) ((end - start) * USEC_IN_SECOND), elapsed / 1000);
 }
 
 void zip_sum(double *left, double *right, int len) {
@@ -328,106 +460,35 @@ void zip_sum(double *left, double *right, int len) {
 
 void merge(int n, double *m1, double *m2) {
     int i;
+    double start, end;
+
+    start = omp_get_wtime();
     #pragma omp parallel for default(none) private(i) shared(m1,m2,n) schedule(runtime)
     for (i = 0; i < n; ++i) {
         m2[i] *= m1[i];
     }
+    end = omp_get_wtime();
+    printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 }
 
-void rs_sort2(int n, double *array) {
-    int chunk_size;
-    int a, b;
-    int temp_size;
-    double *temp;
-    int i;
+void merge_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem m1, cl_mem m2) {
+    cl_event event;
+    cl_ulong startCl, endCl;
+    double start, end;
+    size_t size;
 
-    chunk_size = (n + 1) / 2;
-    #pragma omp parallel sections default(none) shared(array, chunk_size)
-    {
-        #pragma omp section
-        {
-            sort(chunk_size, array);
-        }
-        #pragma omp section
-        {
-            sort(chunk_size, array + chunk_size);
-        }
-    }
+    size = n;
+    start = omp_get_wtime();
+    clSetKernelArg(kernel, 0, sizeof(cl_mem), &m1);
+    clSetKernelArg(kernel, 1, sizeof(cl_mem), &m2);
+    clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &size, NULL, 0, NULL, &event);
+    clWaitForEvents(1, &event);
+    end = omp_get_wtime();
 
-    temp = malloc(sizeof(double) * n);
-    for (temp_size = 0, a = 0, b = chunk_size; a < n && a < chunk_size && b < n;) {
-        if (array[a] < array[b]) {
-            temp[temp_size++] = array[a++];
-        } else {
-            temp[temp_size++] = array[b++];
-        }
-    }
-    while (a < n && a < chunk_size) {
-        temp[temp_size++] = array[a++];
-    }
-    while (b < n) {
-        temp[temp_size++] = array[b++];
-    }
-    for (i = 0; i < n; ++i) {
-        array[i] = temp[i];
-    }
-    free(temp);
-}
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &startCl, NULL);
+    clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &endCl, NULL);
 
-void rs_sortK(int n, double *array) {
-    int k;
-    int chunk_size;
-    int c;
-    int a, b;
-    int temp_size;
-    double *temp;
-    int i;
-
-    k = omp_get_num_procs();
-    chunk_size = (n + k - 1) / k;
-
-    #pragma omp parallel for default(none) private(c) shared(array,chunk_size,n) schedule(static,1) num_threads(k)
-    for (c = 0; c < n; c += chunk_size) {
-        int subsize;
-        subsize = n - c;
-        subsize = subsize < chunk_size ? subsize : chunk_size;
-        sort(subsize, array + c);
-    }
-
-
-    temp = malloc(sizeof(double) * n);
-    for (; chunk_size < n; chunk_size *= 2) {
-        int offset;
-
-        #pragma omp parallel for default(none) private(offset) shared(array,chunk_size,n,temp) schedule(runtime)
-        for (offset = 0; offset < n; offset += 2 * chunk_size) {
-            int temp_size;
-            int i, j, k;
-            int chunk_1, chunk_2;
-
-            chunk_1 = offset + chunk_size;
-            chunk_2 = chunk_1 + chunk_size;
-
-            temp_size = offset;
-            for (j = offset, k = chunk_1; j < n && k < n && j < chunk_1 && k < chunk_2;) {
-                if (array[j] < array[k]) {
-                    temp[temp_size++] = array[j++];
-                } else {
-                    temp[temp_size++] = array[k++];
-                }
-            }
-            while (j < n && j < chunk_1) {
-                temp[temp_size++] = array[j++];
-            }
-            while (k < n && k < chunk_2) {
-                temp[temp_size++] = array[k++];
-            }
-            for (i = offset; i < temp_size; ++i) {
-                array[i] = temp[i];
-            }
-        }
-    }
-    free(temp);
+    printf("%ld;%ld;", (long) ((end - start) * USEC_IN_SECOND), (endCl - startCl) / 1000);
 }
 
 void rs_sort(int n, double *array) {
@@ -527,4 +588,41 @@ double reduce(int n, double *array, double min) {
         }
     }
     return sum;
+}
+
+void prepare_opencl_context(cl_context *context, cl_command_queue *queue) {
+    cl_platform_id platform_id;
+    cl_device_id device_id;
+
+    clGetPlatformIDs(1, &platform_id, NULL);
+    clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
+    *context = clCreateContext(NULL, 1, &device_id, NULL, NULL, NULL);
+    *queue = clCreateCommandQueue(*context, device_id, CL_QUEUE_PROFILING_ENABLE, NULL);
+}
+
+void build_opencl_program(cl_program *program, cl_context context, char *file_name) {
+    char *source;
+
+    source = read_file(file_name);
+    *program = clCreateProgramWithSource(context, 1, (const char **)&source, NULL, NULL);
+    clBuildProgram(*program, 0, NULL, NULL, NULL, NULL);
+}
+
+char *read_file(char *filename) {
+    FILE *f;
+    size_t file_size;
+    char *result;
+
+    f = fopen(filename, "r");
+    fseek(f, 0, SEEK_END);
+    file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    result = (char *) malloc(file_size + 1);
+    fread(result, 1, file_size, f);
+    fclose(f);
+
+    result[file_size] = '\0';
+
+    return result;
 }
