@@ -12,18 +12,6 @@
 #define A 637.0
 #define CHUNK_SIZE 64
 
-#ifndef _OPENMP
-double omp_get_wtime(void) {
-    struct timeval wtime;
-    gettimeofday(&wtime, NULL);
-    return wtime.tv_sec + ((double) wtime.tv_usec) / USEC_IN_SECOND;
-}
-
-int omp_get_num_procs(void) {
-    return 1;
-}
-#endif
-
 /**
  * Generates a random array of given size and seed.
  * An array has even distribution between (1; A).
@@ -85,25 +73,6 @@ void sort(int n, double *array);
  * @param array an array
  */
 void rs_sort(int n, double *array);
-
-/**
- * Sorts given array using parallelization.
- * Splits array into 2 equal parts, sorts them, then merges into one.
- *
- * @param n size of given array
- * @param array an array
- */
-void rs_sort2(int n, double *array);
-
-/**
- * Sorts given array using parallelization.
- * Splits array into K equal parts, sorts them, then merges into one.
- * K is number of OMP threads.
- *
- * @param n size of given array
- * @param array an array
- */
-void rs_sortK(int n, double *array);
 
 /**
  * Finds minimal positive element of given array.
@@ -184,13 +153,13 @@ double do_work(int n) {
     {
         #pragma omp section
         {
-#ifdef _OPENMP
+#ifdef SHOW_PROGRESS  
+#ifdef _OPENMP 
             while (progress < 100) {
-                sleep(1);
-#ifdef DEBUG                
-                printf("Progress: %d\n", progress);
-#endif                
+                sleep(1);             
+                printf("Progress: %d\n", progress);                
             }
+#endif
 #endif            
         }
         #pragma omp section
@@ -198,43 +167,41 @@ double do_work(int n) {
             double *m1, *m2;
             int m1_size, m2_size;
             double min_value;
-            int sort_type;
             double start, end;
+            double start_g, end_g;
 
-            start = omp_get_wtime();
+            start_g = omp_get_wtime();
 
             m1_size = n;
             m2_size = n / 2;
 
+            start = omp_get_wtime();
             m1 = generate_m1(m1_size);
             progress += 5;
             m2 = generate_m2(m2_size);
             progress += 5;
+            end = omp_get_wtime();
+            printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 
+            start = end;
             map_m1(m1_size, m1);
             progress += 10;
             map_m2(m2_size, m2);
             progress += 10;
+            end = omp_get_wtime();
+            printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 
+            start = end;
             merge(m2_size, m1, m2);
             progress += 10;
+            end = omp_get_wtime();
+            printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 
-            sort_type = atoi(getenv("LAB_SORT_TYPE"));
-            switch (sort_type) {
-                case 0:
-                    rs_sort(m2_size, m2);
-                    break;
-                case 1:
-                    rs_sort2(m2_size, m2);
-                    break;
-                case 2:
-                    rs_sortK(m2_size, m2);        
-                    break;
-                default:
-                    rs_sort(m2_size, m2);
-                    break;
-            }
+            start = end;
+            rs_sort(m2_size, m2);
             progress += 50;
+            end = omp_get_wtime();
+            printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 
             min_value = min_positive(m2_size, m2);
             if (min_value == 0.0) {
@@ -242,10 +209,14 @@ double do_work(int n) {
                 exit(100);
             }
 
+            start = end;
             x = reduce(m2_size, m2, min_value);
             progress += 10;
             end = omp_get_wtime();
-            printf("%ld;%f\n", (long) ((end - start) * USEC_IN_SECOND), x);
+            printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
+            
+            end_g = omp_get_wtime();
+            printf("%ld;%f\n", (long) ((end_g - start_g) * USEC_IN_SECOND), x);
             free(m1);
             free(m2);
         }
@@ -334,107 +305,10 @@ void merge(int n, double *m1, double *m2) {
     }
 }
 
-void rs_sort2(int n, double *array) {
-    int chunk_size;
-    int a, b;
-    int temp_size;
-    double *temp;
-    int i;
-
-    chunk_size = (n + 1) / 2;
-    #pragma omp parallel sections default(none) shared(array, chunk_size)
-    {
-        #pragma omp section
-        {
-            sort(chunk_size, array);
-        }
-        #pragma omp section
-        {
-            sort(chunk_size, array + chunk_size);
-        }
-    }
-
-    temp = malloc(sizeof(double) * n);
-    for (temp_size = 0, a = 0, b = chunk_size; a < n && a < chunk_size && b < n;) {
-        if (array[a] < array[b]) {
-            temp[temp_size++] = array[a++];
-        } else {
-            temp[temp_size++] = array[b++];
-        }
-    }
-    while (a < n && a < chunk_size) {
-        temp[temp_size++] = array[a++];
-    }
-    while (b < n) {
-        temp[temp_size++] = array[b++];
-    }
-    for (i = 0; i < n; ++i) {
-        array[i] = temp[i];
-    }
-    free(temp);
-}
-
-void rs_sortK(int n, double *array) {
-    int k;
-    int chunk_size;
-    int c;
-    int a, b;
-    int temp_size;
-    double *temp;
-    int i;
-
-    k = omp_get_num_procs();
-    chunk_size = (n + k - 1) / k;
-
-    #pragma omp parallel for default(none) private(c) shared(array,chunk_size,n) schedule(static,1) num_threads(k)
-    for (c = 0; c < n; c += chunk_size) {
-        int subsize;
-        subsize = n - c;
-        subsize = subsize < chunk_size ? subsize : chunk_size;
-        sort(subsize, array + c);
-    }
-
-
-    temp = malloc(sizeof(double) * n);
-    for (; chunk_size < n; chunk_size *= 2) {
-        int offset;
-
-        #pragma omp parallel for default(none) private(offset) shared(array,chunk_size,n,temp) schedule(runtime)
-        for (offset = 0; offset < n; offset += 2 * chunk_size) {
-            int temp_size;
-            int i, j, k;
-            int chunk_1, chunk_2;
-
-            chunk_1 = offset + chunk_size;
-            chunk_2 = chunk_1 + chunk_size;
-
-            temp_size = offset;
-            for (j = offset, k = chunk_1; j < n && k < n && j < chunk_1 && k < chunk_2;) {
-                if (array[j] < array[k]) {
-                    temp[temp_size++] = array[j++];
-                } else {
-                    temp[temp_size++] = array[k++];
-                }
-            }
-            while (j < n && j < chunk_1) {
-                temp[temp_size++] = array[j++];
-            }
-            while (k < n && k < chunk_2) {
-                temp[temp_size++] = array[k++];
-            }
-            for (i = offset; i < temp_size; ++i) {
-                array[i] = temp[i];
-            }
-        }
-    }
-    free(temp);
-}
-
 void rs_sort(int n, double *array) {
     int chunks;
     int chunk_size;
     int chunk_n;
-    double *temp;
 
     chunk_size = CHUNK_SIZE;
     chunks = (n + chunk_size - 1) / chunk_size;
@@ -447,20 +321,22 @@ void rs_sort(int n, double *array) {
         sort(subsize, array + chunk_n * chunk_size);
     }
 
-    temp = malloc(sizeof(double) * n);
     for (; chunk_size < n; chunk_size *= 2) {
         chunks = (n + chunk_size - 1) / chunk_size;
-        #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n,temp) schedule(runtime)
+        #pragma omp parallel for default(none) private(chunk_n) shared(array,chunk_size,chunks,n) schedule(runtime)
         for (chunk_n = 0; chunk_n < chunks; chunk_n += 2) {
             int temp_size;
             int i, j, k;
             int chunk_0, chunk_1, chunk_2;
+            double *temp;
 
             chunk_0 = chunk_n * chunk_size;
             chunk_1 = chunk_0 + chunk_size;
             chunk_2 = chunk_1 + chunk_size;
 
-            temp_size = chunk_0;
+            temp = malloc(sizeof(double) * chunk_size * 2);
+
+            temp_size = 0;
             for (j = chunk_0, k = chunk_1; j < n && k < n && j < chunk_1 && k < chunk_2;) {
                 if (array[j] < array[k]) {
                     temp[temp_size++] = array[j++];
@@ -474,12 +350,12 @@ void rs_sort(int n, double *array) {
             while (k < n && k < chunk_2) {
                 temp[temp_size++] = array[k++];
             }
-            for (i = chunk_0; i < temp_size; ++i) {
-                array[i] = temp[i];
+            for (i = 0; i < temp_size; ++i) {
+                array[i + chunk_0] = temp[i];
             }
+            free(temp);
         }
     }
-    free(temp);
 }
 
 /**

@@ -276,27 +276,27 @@ double do_work() {
 	pthread_barrier_wait(&generate_barrier);
 	progress += 10;
 	end = get_wtime();
-	printf("%f;", end - start);
+	printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 	start = end;
 	pthread_barrier_wait(&map_barrier);
 	progress += 20;
 	end = get_wtime();
-	printf("%f;", end - start);
+	printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 	start = end;
 	pthread_barrier_wait(&merge_barrier);
 	progress += 10;
 	end = get_wtime();
-	printf("%f;", end - start);
+	printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 	start = end;
 	pthread_barrier_wait(&sort_barrier);
 	progress += 50;
 	end = get_wtime();
-	printf("%f;", end - start);
+	printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 	start = end;
 	pthread_barrier_wait(&reduce_barrier);
 	progress += 10;
 	end = get_wtime();
-	printf("%f;", end - start);
+	printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 
 	x = 0.0;
 	for (i = 0; i < k; ++i) {
@@ -327,7 +327,7 @@ double do_work() {
 	free(thread_states);
 
 	end_g = get_wtime();
-	printf("%f;%f\n", end_g - start_g, x);
+	printf("%ld;%f\n", (long) ((end_g - start_g) * USEC_IN_SECOND), x);
 
 	pthread_join(pthreads[k], NULL);
 	free(pthreads);
@@ -393,12 +393,12 @@ void *thread_routine(void *arg) {
 
 void *progress_routine(void *arg) {
 	pthread_barrier_wait(&create_barrier);
+#ifdef SHOW_PROGRESS   	
     while (progress < 100) {
-        sleep(1);
-#ifdef OUT_PROGRESS                
-        printf("Progress: %d\n", progress);
-#endif                
+        sleep(1);             
+        printf("Progress: %d\n", progress);            
     }
+#endif
 }
 
 void calculate_range(int tid, int n, RANGE *range) {
@@ -469,6 +469,10 @@ void calculate_range(int tid, int n, RANGE *range) {
 void calculate_merge(int tid, int chunk_s, RANGE *range) {
 	int total_chunks;
 
+	pthread_mutex_lock(&merge_mutex);
+#ifdef DEBUG
+	printf("Merge calc: %d %d %d\n", tid, chunk_s, sort_chunk_size);
+#endif
 	if (chunk_s != sort_chunk_size) {
 		range->start = -1;
 		range->end = -1;
@@ -477,6 +481,7 @@ void calculate_merge(int tid, int chunk_s, RANGE *range) {
 	}
 	total_chunks = (m2_size + chunk_s - 1) / chunk_s;
 	calculate_range(tid, (total_chunks + 1) / 2, range);
+	pthread_mutex_unlock(&merge_mutex);
 }
 
 int generate_m1(int tid) {
@@ -714,6 +719,9 @@ int reduce(int tid, double min, double *x) {
 
     sum = *x;
     calculate_range(tid, m2_size, &range);
+#ifdef DEBUG
+    printf("Reduce: tid=%d, start=%d, end=%d\n", tid, range.start, range.end);
+#endif
     for (i = range.start; i < range.end; ++i) {
         double value;
 
