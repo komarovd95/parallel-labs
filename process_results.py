@@ -90,54 +90,39 @@ for compiler in compilers:
 full_plot.render_to_png("./build/fullplot.png")
 
 # bar plot
-def draw_brp(step):
+def draw_brp(step, step_n):
     bar_plot = pygal.Bar(y_title="Time, ms")
     bar_plot.title = "Step: {}".format(step)
     bar_plot.x_labels = [str(n) for (n, _) in expiremental_data]
-    plot_data = {}
     profiles = ['omp', 'ocl-wtime', 'ocl-profiling']
-    for (n, (_, compilers_data)) in expiremental_data:
+    plot_data = {profile: [] for profile in profiles}
+    for (_, (_, compilers_data)) in expiremental_data:
         for compiler in compilers:
-            sample = min(compilers_data[compiler], key=lambda k: k[0])
-            print(sample)
+            sample = min(compilers_data[compiler], key=lambda k: k[0])[2]
+            if len(sample) == 3:
+                plot_data[profiles[0]].append(sample[step_n])
+            else:
+                plot_data[profiles[1]].append(sample[step_n * 2])
+                plot_data[profiles[2]].append(sample[step_n * 2 + 1])
 
-draw_brp('map_m1')
+    for profile in profiles:
+        bar_plot.add(profile, plot_data[profile])
+    bar_plot.render_to_png("./build/barplot-{}.png".format(step_n))
 
-# def draw_brp(scs, compilers_data, file_name):
-#     bar_plot = pygal.Bar(y_title="Время выполнения, мс")
-#     bar_plot.title = "Parallel Sort {}".format(scs)
-#     bar_plot.x_labels = [str(n) for (n, _) in expiremental_data]
-#     plot_data = {}
-#     for (compiler, n_threads) in compilers_data:
-#         if not n_threads in plot_data:
-#             plot_data[n_threads] = []
-#         pd = plot_data[n_threads]    
-#         for (n, (_, data)) in expiremental_data:
-#             samples = data[compiler]
-#             pd.append(min([sample[0] for sample in samples]))
-#     for n in [1, 2, 4, 10, 100]:
-#         bar_plot.add(str(n), plot_data[n])
-#     bar_plot.render_to_png("./build/barplot-{}.png".format(file_name))    
+draw_brp('Map M1', 0)
+draw_brp('Map M2', 1)
+draw_brp('Merge', 2)
 
-# def draw_brp2(scs, compilers_data, file_name):
-#     bar_plot = pygal.Bar(y_title="Время выполнения, мс")
-#     bar_plot.title = "Parallel Sort {}".format(scs)
-#     bar_plot.x_labels = [str(n) for (n, _) in expiremental_data]
-#     plot_data = {}
-#     for (compiler, n_threads) in compilers_data:
-#         sort_type = compiler[-1]
-#         if not sort_type in plot_data:
-#             plot_data[sort_type] = []
-#         pd = plot_data[sort_type]    
-#         for (n, (_, data)) in expiremental_data:
-#             samples = data[compiler]
-#             pd.append(min([sample[0] for sample in samples]))
-#     for (n, t) in [("0", "64"), ("1", "N / 2"), ("2", "N / K")]:
-#         bar_plot.add(t, plot_data[n])
-#     bar_plot.render_to_png("./build/barplot-{}.png".format(file_name)) 
-
-# draw_brp("64",    [compilers[0]] + [compiler for compiler in compilers[3:15] if compiler[0].endswith("0")], "64")
-# draw_brp("N / 2", [compilers[1]] + [compiler for compiler in compilers[3:15] if compiler[0].endswith("1")], "n2")
-# draw_brp("N / K", [compilers[2]] + [compiler for compiler in compilers[3:15] if compiler[0].endswith("2")], "nk")
-
-# draw_brp2("(types, threads=4)", [compiler for compiler in compilers[3:15] if compiler[1] == 4], "types")
+# overhead
+steps = ['Map M1', 'Map M2', 'Merge']
+over_plot = pygal.Line()
+over_plot.title = "OpenCL Overhead"
+over_plot.x_labels = [str(n) for (n, _) in expiremental_data]
+over_plot_data = {step: [] for step in steps}
+for (_, (_, compilers_data)) in expiremental_data:
+    sample = min(compilers_data[compilers[1]], key=lambda k: k[0])[2]
+    for i in range(0, 3):
+        over_plot_data[steps[i]].append(sample[i * 2] / sample[i * 2 + 1])
+for step in steps:
+    over_plot.add(step, over_plot_data[step])
+over_plot.render_to_png("./build/overplot.png")
