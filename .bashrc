@@ -5,25 +5,23 @@ lab-clean() {
 }
 
 omp-compile() {
-    gcc main.c -O3 -fopenmp -lm -o build/lab$1-gcc-omp.out
+    gcc main.c -O3 -fopenmp -lm -o build/lab$1-omp.out
 }
 
-gcc-compile() {
-    gcc main.c -O3 -lm -o build/lab$1-gcc.out
+ocl-compile() {
+    gcc main.c -O3 -DUSE_OPENCL -fopenmp -lOpenCL -lm -o build/lab$1-ocl.out
 }
 
 omp-run() {
-    export OMP_NUM_THREADS=$3
+    export OMP_NUM_THREADS=$4
     export OMP_SCHEDULE="$5, $6"
-    export LAB_SORT_TYPE=$4
-    omp-compile 4 && lab-exp $1 $2 4 gcc-omp gcc-omp-$3-$5-$6-$4
+    export OMP_NESTED=TRUE
+    omp-compile $1 && lab-exp $2 $3 $1 omp
 }
 
-gcc-run() {
-    export LAB_SORT_TYPE=$3
-    gcc-compile 4 && lab-exp $1 $2 4 gcc gcc-$3
+ocl-run() {
+    ocl-compile $1 && lab-exp $2 $3 $1 ocl
 }
-
 
 lab-exp() {
     # set -e
@@ -32,34 +30,15 @@ lab-exp() {
     counter=$1
     while [ $counter -le $2 ]; do
         echo $4 $counter
-        ./build/lab$3-$4.out $counter 47 > build/lab$3-$5-$counter.txt
+        ./build/lab$3-$4.out $counter 47 > build/lab$3-$4-$counter.txt
         counter=$(( $counter + $step ))
     done
 }
 
 do-lab() {
-    lab=4
+    lab=6
     lab-clean
 
-    # single threaded
-    gcc-run $1 $2 0
-    gcc-run $1 $2 1
-    gcc-run $1 $2 2
-
-    # dynamic 1
-    omp-run $1 $2 2 0 dynamic 1
-    omp-run $1 $2 2 1 dynamic 1
-    omp-run $1 $2 2 2 dynamic 1
-
-    omp-run $1 $2 4 0 dynamic 1
-    omp-run $1 $2 4 1 dynamic 1
-    omp-run $1 $2 4 2 dynamic 1
-
-    omp-run $1 $2 10 0 dynamic 1
-    omp-run $1 $2 10 1 dynamic 1
-    omp-run $1 $2 10 2 dynamic 1
-
-    omp-run $1 $2 100 0 dynamic 1
-    omp-run $1 $2 100 1 dynamic 1
-    omp-run $1 $2 100 2 dynamic 1
+    omp-run $lab $1 $2 4 guided 1
+    ocl-run $lab $1 $2
 }

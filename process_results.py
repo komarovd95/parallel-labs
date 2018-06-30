@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import statistics
 import pygal
 
-regexp = re.compile('lab(\d+)-(\w+-\w+|\w+-\w+-\w+-\w+-\w+-\w+)-(\d+)\.txt')
+regexp = re.compile('lab(\d+)-(\w+)-(\d+)\.txt')
 dir_path = './build'
 source_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f)) and regexp.match(f)]
 
@@ -27,6 +27,9 @@ for file_name in source_files:
     expiremental_data[n] = (x, compilers_data)
 
 expiremental_data = sorted(expiremental_data.items())
+
+print(expiremental_data)
+exit()
 
 sched_types = [
     ('dynamic', 1)

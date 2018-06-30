@@ -44,16 +44,6 @@ double *generate_m1(int n);
 void map_m1(int n, double *m1);
 
 /**
- * Maps values of given array: m1[i] = sqrt(m1[i] / E)
- *
- * @param n size of given array
- * @param queue the OpenCL command queue
- * @param kernel the kernel that will be executed
- * @param buffer the buffer that contains values of M1
- */
-void map_m1_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem buffer);
-
-/**
  * Generates a random array of given size and seed.
  * An array has even distribution between (A; 10A).
  *
@@ -71,19 +61,6 @@ double *generate_m2(int n);
 void map_m2(int n, double *m2);
 
 /**
- * Maps values of given array: m2[i] = abs(tan(m2[i] + m2[i-1]))
- *
- * @param n size of given array
- * @param queue the OpenCL command queue
- * @param copy_kernel the kernel that copies values from M2 to TMP
- * @param sum_kernel the kernel that sums values of M2 and TMP
- * @param map_kernel the kernel that maps values of M2
- * @param m2 the buffer that contains values of M2
- * @param tmp the buffer that contains values of TMP
- */
-void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel sum_kernel, cl_kernel map_kernel, cl_mem m2, cl_mem tmp);
-
-/**
  * Merges values of given arrays into M2 array.
  * Applies function to values while merging: f(a, b) = a * b
  *
@@ -92,18 +69,6 @@ void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel s
  * @param m2 a M2 array
  */
 void merge(int n, double *m1, double *m2);
-
-/**
- * Merges values of given arrays into M2 array.
- * Applies function to values while merging: f(a, b) = a * b
- *
- * @param n size of M2 array
- * @param queue the OpenCL command queue
- * @param kernel the kernel that merges values of M1 and M2
- * @param m1 a M1 buffer
- * @param m2 a M2 buffer
- */
-void merge_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem m1, cl_mem m2);
 
 /**
  * Sorts given array using Insertion Sort algorithm.
@@ -164,6 +129,14 @@ void zip_sum(double *left, double *right, int len);
  */
 double do_work(int n);
 
+#ifdef USE_OPENCL
+/**
+ * Reads the given file.
+ * 
+ * @param filename the name of file that will be read
+ */
+char *read_file(char *filename);
+
 /**
  * Prepares OpenCL context.
  *
@@ -182,11 +155,42 @@ void prepare_opencl_context(cl_context *context, cl_command_queue *queue);
 void build_opencl_program(cl_program *program, cl_context context, char *file_name);
 
 /**
- * Reads the given file.
- * 
- * @param filename the name of file that will be read
+ * Maps values of given array: m1[i] = sqrt(m1[i] / E)
+ *
+ * @param n size of given array
+ * @param queue the OpenCL command queue
+ * @param kernel the kernel that will be executed
+ * @param buffer the buffer that contains values of M1
  */
-char *read_file(char *filename);
+void map_m1_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem buffer);
+
+/**
+ * Maps values of given array: m2[i] = abs(tan(m2[i] + m2[i-1]))
+ *
+ * @param n size of given array
+ * @param queue the OpenCL command queue
+ * @param copy_kernel the kernel that copies values from M2 to TMP
+ * @param sum_kernel the kernel that sums values of M2 and TMP
+ * @param map_kernel the kernel that maps values of M2
+ * @param m2 the buffer that contains values of M2
+ * @param tmp the buffer that contains values of TMP
+ */
+void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel sum_kernel, cl_kernel map_kernel, cl_mem m2, cl_mem tmp);
+
+/**
+ * Merges values of given arrays into M2 array.
+ * Applies function to values while merging: f(a, b) = a * b
+ *
+ * @param n size of M2 array
+ * @param queue the OpenCL command queue
+ * @param kernel the kernel that merges values of M1 and M2
+ * @param m1 a M1 buffer
+ * @param m2 a M2 buffer
+ */
+void merge_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem m1, cl_mem m2);
+#endif
+
+
 
 int main(int argc, char* argv[]) {
     int n;
@@ -216,6 +220,46 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+#ifdef USE_OPENCL
+
+char *read_file(char *filename) {
+    FILE *f;
+    size_t file_size, read;
+    char *result;
+
+    f = fopen(filename, "r");
+    fseek(f, 0, SEEK_END);
+    file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    result = (char *) malloc(file_size + 1);
+    read = fread(result, 1, file_size, f);
+    fclose(f);
+
+    result[file_size] = '\0';
+
+    return result;
+}
+
+void prepare_opencl_context(cl_context *context, cl_command_queue *queue) {
+    cl_platform_id platform_id;
+    cl_device_id device_id;
+
+    clGetPlatformIDs(1, &platform_id, NULL);
+    clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
+    *context = clCreateContext(NULL, 1, &device_id, NULL, NULL, NULL);
+    *queue = clCreateCommandQueue(*context, device_id, CL_QUEUE_PROFILING_ENABLE, NULL);
+}
+
+void build_opencl_program(cl_program *program, cl_context context, char *file_name) {
+    char *source;
+
+    source = read_file(file_name);
+    *program = clCreateProgramWithSource(context, 1, (const char **)&source, NULL, NULL);
+    clBuildProgram(*program, 0, NULL, NULL, NULL, NULL);
+}
+#endif
+
 double do_work(int n) {
     double x;
     int progress;
@@ -235,12 +279,12 @@ double do_work(int n) {
         #pragma omp section
         {
 #ifdef _OPENMP
+#ifdef SHOW_PROGRESS
             while (progress < 100) {
                 sleep(1);
-#ifdef DEBUG                
                 printf("Progress: %d\n", progress);
-#endif                
             }
+#endif
 #endif            
         }
         #pragma omp section
@@ -339,6 +383,7 @@ double *generate_m1(int n) {
     return array;
 }
 
+#ifdef USE_OPENCL
 void map_m1_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem buffer) {
     cl_event event;
     cl_ulong startCl, endCl;
@@ -357,6 +402,7 @@ void map_m1_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem buffer) {
 
     printf("%ld;%ld;", (long) ((end - start) * USEC_IN_SECOND), (endCl - startCl) / 1000);
 }
+#endif
 
 void map_m1(int n, double *m1) {
     int i;
@@ -413,6 +459,8 @@ void map_m2(int n, double *m2) {
     printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 }
 
+
+#ifdef USE_OPENCL
 void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel sum_kernel, cl_kernel map_kernel, cl_mem m2, cl_mem tmp) {
     cl_ulong startCl, endCl, elapsed;
     cl_event event;
@@ -449,6 +497,7 @@ void map_m2_CL(int n, cl_command_queue queue, cl_kernel copy_kernel, cl_kernel s
 
     printf("%ld;%ld;", (long) ((end - start) * USEC_IN_SECOND), elapsed / 1000);
 }
+#endif
 
 void zip_sum(double *left, double *right, int len) {
     int i;
@@ -471,6 +520,8 @@ void merge(int n, double *m1, double *m2) {
     printf("%ld;", (long) ((end - start) * USEC_IN_SECOND));
 }
 
+
+#ifdef USE_OPENCL
 void merge_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem m1, cl_mem m2) {
     cl_event event;
     cl_ulong startCl, endCl;
@@ -490,6 +541,7 @@ void merge_CL(int n, cl_command_queue queue, cl_kernel kernel, cl_mem m1, cl_mem
 
     printf("%ld;%ld;", (long) ((end - start) * USEC_IN_SECOND), (endCl - startCl) / 1000);
 }
+#endif
 
 void rs_sort(int n, double *array) {
     int chunks;
@@ -588,41 +640,4 @@ double reduce(int n, double *array, double min) {
         }
     }
     return sum;
-}
-
-void prepare_opencl_context(cl_context *context, cl_command_queue *queue) {
-    cl_platform_id platform_id;
-    cl_device_id device_id;
-
-    clGetPlatformIDs(1, &platform_id, NULL);
-    clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
-    *context = clCreateContext(NULL, 1, &device_id, NULL, NULL, NULL);
-    *queue = clCreateCommandQueue(*context, device_id, CL_QUEUE_PROFILING_ENABLE, NULL);
-}
-
-void build_opencl_program(cl_program *program, cl_context context, char *file_name) {
-    char *source;
-
-    source = read_file(file_name);
-    *program = clCreateProgramWithSource(context, 1, (const char **)&source, NULL, NULL);
-    clBuildProgram(*program, 0, NULL, NULL, NULL, NULL);
-}
-
-char *read_file(char *filename) {
-    FILE *f;
-    size_t file_size;
-    char *result;
-
-    f = fopen(filename, "r");
-    fseek(f, 0, SEEK_END);
-    file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    result = (char *) malloc(file_size + 1);
-    fread(result, 1, file_size, f);
-    fclose(f);
-
-    result[file_size] = '\0';
-
-    return result;
 }
