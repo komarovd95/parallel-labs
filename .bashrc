@@ -20,6 +20,9 @@ omp-run() {
 }
 
 ocl-run() {
+    export OMP_NUM_THREADS=$4
+    export OMP_SCHEDULE="$5, $6"
+    export OMP_NESTED=TRUE
     ocl-compile $1 && lab-exp $2 $3 $1 ocl
 }
 
@@ -40,5 +43,5 @@ do-lab() {
     lab-clean
 
     omp-run $lab $1 $2 4 guided 1
-    ocl-run $lab $1 $2
+    ocl-run $lab $1 $2 4 guided 1
 }
